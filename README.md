@@ -45,7 +45,7 @@ DungeonKUrawler/
 | Java JDK | 21+     |
 | Maven    | 3.8+    |
 
-JavaFX is pulled automatically by Maven from Maven Central — no manual download needed.
+JavaFX is pulled automatically by Maven from Maven Central - no manual download needed.
 
 ---
 

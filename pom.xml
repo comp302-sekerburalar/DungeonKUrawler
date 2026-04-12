@@ -28,13 +28,11 @@
             <artifactId>javafx-controls</artifactId>
             <version>${javafx.version}</version>
         </dependency>
-        <!-- JavaFX FXML (optional – not used in Phase 1 but ready for later) -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
         </dependency>
-        <!-- JavaFX Media (for audio feedback in later phases) -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-media</artifactId>
@@ -44,7 +42,6 @@
 
     <build>
         <plugins>
-            <!-- JavaFX Maven Plugin – run with: mvn javafx:run -->
             <plugin>
                 <groupId>org.openjfx</groupId>
                 <artifactId>javafx-maven-plugin</artifactId>
@@ -87,7 +84,6 @@
             </plugin>
         </plugins>
 
-        <!-- Make sure CSS and other resources are included -->
         <resources>
             <resource>
                 <directory>src/main/resources</directory>

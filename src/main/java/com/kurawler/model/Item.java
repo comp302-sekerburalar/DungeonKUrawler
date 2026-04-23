@@ -15,4 +15,8 @@ public class Item {
     public String getType() { 
     	return type; 
     	}
+    
+    public boolean isStatic() {
+        return type.equalsIgnoreCase("STATIC");
+    }
 }

@@ -4,10 +4,10 @@ import java.util.EnumMap;
 import java.util.Map;
 
 /**
- * Holds the  five stats for any character (hero or enemy).
+ * Holds the five stats for any character (hero or enemy).
  * All values are clamped to [0, max].
  */
-public class CharacterStats {  
+public class CharacterStats {
 
     private final Map<StatType, Integer> current = new EnumMap<>(StatType.class);
     private final Map<StatType, Integer> max     = new EnumMap<>(StatType.class);
@@ -29,7 +29,7 @@ public class CharacterStats {
     public int getMax(StatType t) { return max.get(t); }
 
     /**
-     * Applying delta to stat, clamping to [0, max].
+     * Apply delta to stat, clamping to [0, max].
      * @return the actual change applied
      */
     public int modify(StatType t, int delta) {

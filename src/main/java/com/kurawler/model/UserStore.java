@@ -9,22 +9,21 @@ import java.util.Map;
 import java.util.HexFormat;
 
 /**
- * UserStore manages user authentication and registration.
+ * Persistent user account store backed by a simple JSON file.
  *
  * Passwords are stored as SHA-256 hashes (hex strings).
  * The save file is written to the user's home directory:
- * ~/.kurawler/users.json
+ *   ~/.kurawler/users.json
  *
  * File format:
  * {
- * "HERONAME": "sha256hexhash",
- * ...
+ *   "HERONAME": "sha256hexhash",
+ *   ...
  * }
  */
-
 public class UserStore {
 
-    private static final Path SAVE_DIR = Path.of(System.getProperty("user.home"), ".kurawler");
+    private static final Path SAVE_DIR  = Path.of(System.getProperty("user.home"), ".kurawler");
     private static final Path SAVE_FILE = SAVE_DIR.resolve("users.json");
 
     /** username (uppercase) -> SHA-256 hex hash of password */
@@ -38,11 +37,10 @@ public class UserStore {
 
     /**
      * Authenticate a user.
-     * 
      * @return true if the username exists and the password matches
      */
     public boolean authenticate(String username, String password) {
-        String key = username.trim().toUpperCase();
+        String key  = username.trim().toUpperCase();
         String hash = hash(password);
         return hash.equals(users.get(key));
     }
@@ -66,8 +64,7 @@ public class UserStore {
     // ---------- Persistence ----------
 
     private void load() {
-        if (!Files.exists(SAVE_FILE))
-            return;
+        if (!Files.exists(SAVE_FILE)) return;
         try {
             String content = Files.readString(SAVE_FILE);
             parseJson(content);
@@ -92,12 +89,11 @@ public class UserStore {
         int i = 0;
         for (Map.Entry<String, String> entry : users.entrySet()) {
             sb.append("  \"")
-                    .append(escape(entry.getKey()))
-                    .append("\": \"")
-                    .append(escape(entry.getValue()))
-                    .append("\"");
-            if (i < users.size() - 1)
-                sb.append(",");
+              .append(escape(entry.getKey()))
+              .append("\": \"")
+              .append(escape(entry.getValue()))
+              .append("\"");
+            if (i < users.size() - 1) sb.append(",");
             sb.append("\n");
             i++;
         }

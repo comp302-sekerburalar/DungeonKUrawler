@@ -13,7 +13,7 @@ import com.kurawler.components.PixelBorder;
  */
 public class WelcomeScreen extends BaseScreen {
 
-    private Text txtHeroName;
+    private Text  txtHeroName;
     private String heroName = "HERO";
 
     public WelcomeScreen(ScreenManager manager) {
@@ -61,7 +61,7 @@ public class WelcomeScreen extends BaseScreen {
 
         // Buttons
         DungeonButton btnBegin = new DungeonButton("⚔  BEGIN QUEST", true);
-        DungeonButton btnBack = new DungeonButton("◄  BACK TO MENU");
+        DungeonButton btnBack  = new DungeonButton("◄  BACK TO MENU");
 
         btnBegin.setMaxWidth(Double.MAX_VALUE);
         btnBack.setMaxWidth(Double.MAX_VALUE);
@@ -79,10 +79,9 @@ public class WelcomeScreen extends BaseScreen {
 
         root.setOnKeyPressed(e -> {
             switch (e.getCode()) {
-                case ENTER -> manager.startGame(heroName);
+                case ENTER  -> manager.startGame(heroName);
                 case ESCAPE -> manager.showMainMenu();
-                default -> {
-                }
+                default -> {}
             }
         });
         root.setFocusTraversable(true);
@@ -95,10 +94,10 @@ public class WelcomeScreen extends BaseScreen {
         box.setAlignment(Pos.CENTER_LEFT);
 
         String[] lines = {
-                "▸  FIND THE HIDDEN RELIC TO WIN.",
-                "▸  DEFEAT KNIGHTS & SORCERERS.",
-                "▸  DON'T LET YOUR HP REACH ZERO.",
-                "▸  USE ITEMS, SPELLS & WEAPONS WISELY."
+            "▸  FIND THE HIDDEN RELIC TO WIN.",
+            "▸  DEFEAT KNIGHTS & SORCERERS.",
+            "▸  DON'T LET YOUR HP REACH ZERO.",
+            "▸  USE ITEMS, SPELLS & WEAPONS WISELY."
         };
         for (String line : lines) {
             Text t = new Text(line);
@@ -108,7 +107,7 @@ public class WelcomeScreen extends BaseScreen {
         return box;
     }
 
-    /** Updating the hero name label before the screen is shown. */
+    /** Update the hero name label before the screen is shown. */
     public void setHeroName(String name) {
         this.heroName = name;
         if (txtHeroName != null) {

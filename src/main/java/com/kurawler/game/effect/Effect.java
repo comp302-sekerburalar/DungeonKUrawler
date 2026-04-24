@@ -18,4 +18,3 @@ public interface Effect {
      */
     void apply(GameEngine engine, GameObject subject);
 }
-

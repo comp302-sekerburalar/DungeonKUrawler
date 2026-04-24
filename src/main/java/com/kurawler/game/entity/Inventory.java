@@ -39,6 +39,5 @@ public class Inventory {
         return slots.get(index);
     }
 
-    
     public List<GameObject> all() { return Collections.unmodifiableList(slots); }
 }

@@ -13,9 +13,9 @@ import javafx.scene.layout.StackPane;
  */
 public class PixelTextField extends StackPane {
 
-    private final TextField plain;
+    private final TextField     plain;
     private final PasswordField secret;
-    private final boolean isPassword;
+    private final boolean       isPassword;
 
     /** Plain text field */
     public PixelTextField(String placeholder) {
@@ -26,7 +26,7 @@ public class PixelTextField extends StackPane {
     public PixelTextField(String placeholder, boolean isPassword) {
         this.isPassword = isPassword;
 
-        plain = new TextField();
+        plain  = new TextField();
         secret = new PasswordField();
 
         plain.setPromptText(placeholder);
@@ -60,6 +60,7 @@ public class PixelTextField extends StackPane {
         secret.clear();
     }
 
+    /** Allow setting text programmatically (e.g. remembered username). */
     public void setText(String value) {
         if (isPassword) {
             secret.setText(value);

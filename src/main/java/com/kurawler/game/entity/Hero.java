@@ -13,7 +13,6 @@ import com.kurawler.engine.Vec2;
  *   Energy = 100 (design decision: start full)
  */
 public class Hero {
-    
 
     private Vec2           pos;
     private CharacterStats stats;

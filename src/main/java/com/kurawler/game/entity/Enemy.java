@@ -61,7 +61,6 @@ public class Enemy {
             System.out.println(msg);
         }
 
-        
         // Move
         Vec2 next = chooseNextCell(heroPos, map);
         if (next != null && map.isPassable(next)) {

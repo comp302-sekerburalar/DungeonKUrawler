@@ -7,7 +7,6 @@ public enum StatType {
     STR    ("STR"),
     DEF    ("DEF"),
     ENERGY ("Energy");
-    
 
     private final String display;
     StatType(String display) { this.display = display; }

@@ -10,6 +10,15 @@ import com.kurawler.game.objects.GameObject;
  * Separating Effect from Action means N actions × M effects without NxM subclasses
  * (spec §1.2 hint).
  */
+
+/**
+ * Additionally, we implemented the Strategy Pattern here to separate
+ * different effect behaviors from the game engine logic.
+ *
+ * Each effect (such as damage, healing, or item pickup)
+ * provides its own implementation of the apply method.
+ * This makes the system easier to extend and maintain.
+ */
 public interface Effect {
     /**
      * Apply this effect.

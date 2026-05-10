@@ -19,6 +19,8 @@ import com.kurawler.game.objects.GameObject;
  * provides its own implementation of the apply method.
  * This makes the system easier to extend and maintain.
  */
+
+
 public interface Effect {
     /**
      * Apply this effect.

@@ -23,7 +23,14 @@ import java.util.function.Consumer;
  *  – Spawn enemies on a timer (spec §2.5: every 9 s, max 5)
  *  – Run enemy AI ticks
  *  – Notify the UI layer via callbacks
- */
+ * 
+ * 
+ * GameEngine is used as Facade Pattern to simplify access to the game system. Instead of letting different 
+ * parts of the program interact directly with the Map, Hero, and Enemy classes, the GameEngine acts as a single control center.
+ * It hides the internal complexity and provides a clean interface for
+ * managing core game actions like movement, interactions, and enemy logic.
+      * */
+
 public class GameEngine {
 
     // ---------- Spec constants ----------

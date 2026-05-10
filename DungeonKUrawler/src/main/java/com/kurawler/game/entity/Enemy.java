@@ -13,6 +13,13 @@ import java.util.Random;
  *   distance > DETECTION_RADIUS  → ROAMING  (random walk)
  *   distance ≤ DETECTION_RADIUS  → CHASING  (move toward hero)
  */
+/**
+ * We used the State Pattern here to make the enemy AI cleaner and easier to extend.
+ *
+ * Instead of filling the Enemy class with large if/else blocks to decide behavior,
+ * each behavior (like ROAMING or CHASING) is represented as a separate state.
+ *
+ */
 public class Enemy {
 
     public enum Type { KNIGHT, SORCERER }

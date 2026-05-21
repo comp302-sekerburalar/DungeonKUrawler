@@ -1,6 +1,9 @@
 package com.kurawler.engine;
 
 import org.junit.jupiter.api.Test;
+
+import com.kurawler.game.objects.GameObject;
+
 import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 
@@ -61,4 +64,62 @@ public class GridMapTest {
     }
 
     
+
+
+/** 
+ * Tests for IsPassable method and its 3 test cases:
+ * 1. Out-of-bounds positions should return false.
+ * 2. Tiles that are walls should return false.
+ * 3. Tiles that are blocked by objects should return false.
+ * 4. Tiles that are floor and have no blocking objects should return true.
+ * 
+ */
+@Test
+public void testIsPassableOutOfBounds() {
+    GridMap map = new GridMap(5, 5);
+
+    assertFalse(map.isPassable(new Vec2(-1, 2)));
+    assertFalse(map.isPassable(new Vec2(10, 10)));
+}
+
+
+@Test
+public void testIsPassableWallTile() {
+    GridMap map = new GridMap(5, 5);
+
+    Vec2 pos = new Vec2(2, 2);
+    map.setTile(pos, TileType.WALL);
+
+    assertFalse(map.isPassable(pos));
+}
+
+@Test
+public void testIsPassableBlockedByObject() {
+    GridMap map = new GridMap(5, 5);
+
+    Vec2 pos = new Vec2(2, 2);
+
+    // Create a fake blocking object for testing purposes
+    GameObject rock = new GameObject("rock", pos, true) {
+        @Override
+        public String renderTag() {
+            return "ROCK";
+        }
+    };
+
+    map.placeObject(rock);
+
+    assertFalse(map.isPassable(pos));
+}
+
+@Test
+public void testIsPassableReturnsTrueOnEmptyFloor() {
+    GridMap map = new GridMap(5, 5);
+
+    Vec2 pos = new Vec2(2, 2);
+
+    assertTrue(map.isPassable(pos));
+}
+
+
 }

@@ -93,6 +93,26 @@ public class GridMap {
      *  - WALL base tile
      *  - Any STATIC-type GameObject on the cell
      */
+
+    /**
+     * Method spesification for isPassable:
+     * Determines if a given position on the grid map is passable for a moving entity (hero or enemy).  
+     * Requires:
+     * -pos is not null
+     * -Map tiles and objects are properly initialized
+     * 
+     * Modifies:
+     * -Nothing 
+     * 
+     * Effects:
+     * Returns false if the position is out-of-bounds, 
+     * returns false if the base tile at the position is a WALL,
+     * returns false if there is any STATIC-type GameObject on the cell,
+     * returns true otherwise (the cell is passable).
+     * 
+     */
+
+    
     public boolean isPassable(Vec2 pos) {
         if (!pos.inBounds(cols, rows)) return false;
         if (baseTiles[pos.col()][pos.row()] == TileType.WALL) return false;

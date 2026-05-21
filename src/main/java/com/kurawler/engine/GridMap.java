@@ -4,17 +4,30 @@ import com.kurawler.game.objects.GameObject;
 
 import java.util.*;
 
-/**
- * Represents the dungeon floor as a 2-D grid.
- *
- * Each cell knows:
- *  - its base TileType (FLOOR / WALL)
- *  - the list of GameObjects placed on it
- *
- * Collision rules (spec §1.1):
- *  - WALL or STATIC object  → hero CANNOT enter
- *  - ITEM on a FLOOR tile   → hero CAN enter (items are passable)
- */
+// -------------------------------------------------------------------------
+    // ADT Specifications
+    // -------------------------------------------------------------------------
+    // OVERVIEW: GridMap represents a mutable, 2-dimensional dungeon floor grid of 
+    // size (cols x rows). It maintains structural terrain types (FLOOR/WALL) and 
+    // tracks positions of various interactive GameObjects scattered across cells.
+    //
+    // ABSTRACTION FUNCTION (AF):
+    // AF(cols, rows, baseTiles, objects) = A dungeon map with width `cols` and height `rows`.
+    // For any valid coordinate position p (where 0 <= p.col < cols and 0 <= p.row < rows):
+    //   - The terrain type at p is given by baseTiles[p.col][p.row]
+    //   - The items/entities present at p are given by the list corresponding to objects.get(p) 
+    //     (or an empty list if the coordinate key is missing).
+    //
+    // REPRESENTATION INVARIANT (RI):
+    // 1. cols > 0 and rows > 0.
+    // 2. baseTiles != null, and its dimensions must precisely match cols x rows.
+    // 3. baseTiles continuous cells must not contain null elements (every element is FLOOR or WALL).
+    // 4. objects != null.
+    // 5. For every Vec2 key 'pos' in the objects map:
+    //      - pos.inBounds(cols, rows) must be true.
+    //      - objects.get(pos) != null and must not be empty.
+    //      - Every GameObject obj in objects.get(pos) must satisfy obj.getPos().equals(pos).
+
 public class GridMap {
 
     private final int cols;
@@ -145,4 +158,41 @@ public class GridMap {
         }
         return result;
     }
+
+    /**
+     * Checks if the representation invariant holds true.
+     * @throws AssertionError if the representation invariant is violated.
+     */
+    public void repOk() {
+        assert cols > 0 : "RI Violated: cols must be positive";
+        assert rows > 0 : "RI Violated: rows must be positive";
+        assert baseTiles != null : "RI Violated: baseTiles array cannot be null";
+        assert baseTiles.length == cols : "RI Violated: baseTiles width must match cols";
+        assert baseTiles[0].length == rows : "RI Violated: baseTiles height must match rows";
+
+        // Check array bounds and contents
+        for (int c = 0; c < cols; c++) {
+            for (int r = 0; r < rows; r++) {
+                assert baseTiles[c][r] != null : "RI Violated: Tile type cannot be null";
+            }
+        }
+
+        assert objects != null : "RI Violated: objects map cannot be null";
+
+        // Check internal map consistency
+        for (Map.Entry<Vec2, List<GameObject>> entry : objects.entrySet()) {
+            Vec2 pos = entry.getKey();
+            List<GameObject> list = entry.getValue();
+
+            assert pos.inBounds(cols, rows) : "RI Violated: Object key position is out of bounds";
+            assert list != null : "RI Violated: Object list cannot be null";
+            assert !list.isEmpty() : "RI Violated: Position key exists but points to an empty list";
+
+            for (GameObject obj : list) {
+                assert obj != null : "RI Violated: GameObject in list cannot be null";
+                assert obj.getPos().equals(pos) : "RI Violated: GameObject position field mismatches map key coordinate";
+            }
+        }
+    }
+
 }

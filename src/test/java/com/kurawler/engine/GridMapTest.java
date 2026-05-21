@@ -67,7 +67,7 @@ public class GridMapTest {
 
 
 /** 
- * Tests for IsPassable method and its 3 test cases:
+ * Tests for IsPassable method and its 4 test cases:
  * 1. Out-of-bounds positions should return false.
  * 2. Tiles that are walls should return false.
  * 3. Tiles that are blocked by objects should return false.

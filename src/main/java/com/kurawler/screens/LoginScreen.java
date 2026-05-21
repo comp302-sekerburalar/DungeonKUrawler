@@ -131,33 +131,84 @@ public class LoginScreen extends BaseScreen {
 
     // ---------- Logic ----------
 
-    private void attemptLogin() {
-        String user = tfUsername.getText().trim();
-        String pass = tfPassword.getRawText();
+    // -------------------------------------------------------------------------
+    // Method Specifications (Fulfills Individual Requirement)
+    // -------------------------------------------------------------------------
+    /**
+     * Processes credentials entered by the user to authenticate and navigate.
+     * * @requires manager != null and manager.getUserStore() != null
+     * @modifies lblError state, tfUsername text, tfPassword text, manager screen state
+     * @effects If username or password strings are empty after trimming, displays a local validation 
+     * error message. If credentials match a profile in the UserStore system, clears 
+     * any active validation errors and transitions the app manager to the WelcomeScreen. 
+     * Otherwise, displays an invalid credentials authentication error message.
+     */
+    
 
+    public void attemptLogin() {
+        String user = tfUsername != null && tfUsername.getText() != null ? tfUsername.getText().trim() : "";
+        String pass = tfPassword != null && tfPassword.getRawText() != null ? tfPassword.getRawText() : "";
+
+        processLoginLogic(user, pass);
+    }
+
+    /**
+     * Isolated core business logic to allow safe automated JUnit execution 
+     * without triggering JavaFX graphical toolkit thread crashes.
+     */
+    public void processLoginLogic(String user, String pass) {
         if (user.isEmpty() || pass.isEmpty()) {
             showError("ENTER YOUR HERO NAME AND PASSWORD.");
             return;
         }
 
-        UserStore store = manager.getUserStore();
-        if (store.authenticate(user, pass)) {
+        // Safe check: Use manager's store if it exists, otherwise fall back to a mock system state
+        UserStore store = (manager != null) ? manager.getUserStore() : testFallbackStore;
+        
+        if (store != null && store.authenticate(user, pass)) {
             hideError();
-            manager.showWelcome(user.toUpperCase());
+            if (manager != null) {
+                manager.showWelcome(user.toUpperCase());
+            } else {
+                System.out.println("[TEST MODE] Successfully authenticated: " + user.toUpperCase());
+                this.testWelcomeRedirectTriggered = true;
+            }
         } else {
             showError("INVALID CREDENTIALS. TRY AGAIN.");
         }
     }
 
+    // --- Safe Fallback fields explicitly for JUnit Testing ---
+    private UserStore testFallbackStore;
+    private boolean testWelcomeRedirectTriggered = false;
+
+    /** Package-private helper allowing tests to set up mock accounts without using ScreenManager */
+    void setTestFallbackStore(UserStore store) {
+        this.testFallbackStore = store;
+    }
+
+    /** Package-private helper allowing tests to verify if welcome redirection path executed */
+    boolean isTestWelcomeRedirectTriggered() {
+        return testWelcomeRedirectTriggered;
+    }
+
     private void showError(String msg) {
-        lblError.setText(msg);
-        lblError.setVisible(true);
-        lblError.setManaged(true);
+        if (lblError != null) {
+            lblError.setText(msg);
+            lblError.setVisible(true);
+            lblError.setManaged(true);
+        } else {
+            System.out.println("[TEST LOG MODE] Error Displayed: " + msg);
+        }
     }
 
     private void hideError() {
-        lblError.setVisible(false);
-        lblError.setManaged(false);
+        if (lblError != null) {
+            lblError.setVisible(false);
+            lblError.setManaged(false);
+        } else {
+            System.out.println("[TEST LOG MODE] Error Hidden.");
+        }
     }
 
     /** Called by ScreenManager before showing this screen. */

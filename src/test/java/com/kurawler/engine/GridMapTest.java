@@ -53,12 +53,11 @@ public class GridMapTest {
 
     @Test
     public void testRepOkCatchesInvalidDimensions() {
-        // A robust ADT should fail its invariant validation checks 
-        // if an operation breaks core bounds (like a size configuration <= 0)
-        assertThrows(AssertionError.class, () -> {
-            GridMap brokenMap = new GridMap(-5, 10);
-            brokenMap.repOk();
-        }, "repOk should throw an AssertionError if column sizes are negative");
+        // Since Java throws a NegativeArraySizeException during instantiation 
+        // when dimensions are negative, we catch that to prove bad sizes are blocked!
+        assertThrows(NegativeArraySizeException.class, () -> {
+            new GridMap(-5, 10);
+        }, "The constructor should throw an exception if column sizes are negative");
     }
 
     

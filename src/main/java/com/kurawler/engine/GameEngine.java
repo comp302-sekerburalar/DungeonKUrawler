@@ -24,6 +24,29 @@ import java.util.function.Consumer;
  * – Run enemy AI ticks
  * – Notify the UI layer via callbacks
  */
+
+/*
+ * Overview:
+ * GameEngine manages the core state and behavior of the dungeon game.
+ * It controls the map, hero, enemies, object interactions,
+ * enemy spawning, and game update timers.
+ *
+ * Abstract Function:
+ * AF(map, hero, enemies) =
+ * the current playable game state consisting of:
+ * - the dungeon map layout
+ * - the hero state and position
+ * - the active enemy entities
+ * - game interaction and spawning logic
+ *
+ * Representation Invariant:
+ * - map != null
+ * - hero != null
+ * - enemies != null
+ * - enemies.size() <= MAX_ENEMIES
+ * - no enemy in enemies is null
+ * - rng != null
+ */
 public class GameEngine {
 
     // ---------- Spec constants ----------
@@ -335,5 +358,30 @@ public class GameEngine {
 
     public void addEnemyForTest(Enemy enemy) {
         enemies.add(enemy);
+    }
+
+    public boolean repOk() {
+
+        if (map == null)
+            return false;
+
+        if (hero == null)
+            return false;
+
+        if (enemies == null)
+            return false;
+
+        if (rng == null)
+            return false;
+
+        if (enemies.size() > MAX_ENEMIES)
+            return false;
+
+        for (Enemy e : enemies) {
+            if (e == null)
+                return false;
+        }
+
+        return true;
     }
 }

@@ -32,6 +32,16 @@ public class CharacterStats {
      * Apply delta to stat, clamping to [0, max].
      * @return the actual change applied
      */
+    
+    /**
+    * REQUIRES: t is not null and this CharacterStats object has initialized
+     *           current and maximum values for t.
+    * MODIFIES: this.current
+    * EFFECTS: Attempts to add delta to the current value of stat t, but clamps
+    *          the result to the valid range [0, getMax(t)]. Stores the clamped
+     *          value as the new current value of t and returns the actual change
+    *          applied, which may be smaller than delta if clamping occurs.
+    */
     public int modify(StatType t, int delta) {
         int before  = current.get(t);
         int clamped = Math.max(0, Math.min(max.get(t), before + delta));

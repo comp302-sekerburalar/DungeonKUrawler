@@ -37,7 +37,8 @@ public class GameEngine {
     private final GridMap map;
     private final Hero hero;
     private final List<Enemy> enemies = new ArrayList<>();
-    private final Random rng = new Random();
+    // private final Random rng = new Random();
+    private Random rng = new Random();
     private int enemyIdCounter = 0;
 
     // ---------- UI callbacks ----------
@@ -212,6 +213,8 @@ public class GameEngine {
      * - posts status messages
      * - notifies observers when map changes
      */
+    // For testing purposes its not private now. In original code this function is
+    // private
     void spawnEnemy() {
         double roll = rng.nextDouble();
 
@@ -318,5 +321,19 @@ public class GameEngine {
 
     public List<Enemy> getEnemies() {
         return Collections.unmodifiableList(enemies);
+    }
+
+    // TESTERS
+
+    public void setRandom(Random random) {
+        this.rng = random;
+    }
+
+    public int getMaxEnemies() {
+        return MAX_ENEMIES;
+    }
+
+    public void addEnemyForTest(Enemy enemy) {
+        enemies.add(enemy);
     }
 }

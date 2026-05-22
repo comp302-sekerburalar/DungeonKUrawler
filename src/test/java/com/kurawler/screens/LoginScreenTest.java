@@ -57,4 +57,14 @@ public class LoginScreenTest {
         screen.processLoginLogic("VALID_HERO", "SECRET123");
         assertTrue(screen.isTestWelcomeRedirectTriggered(), "Should successfully flag route tracking variables as matching specifications");
     }
+
+    // Test 4: Trimming validation boundary check
+    @Test
+    public void testLoginSucceedsWithTrimming() {
+        LoginScreen screen = createIsolatedScreen();
+
+        // The production logic trims usernames, so this should still pass perfectly!
+        screen.processLoginLogic("   VALID_HERO   ", "SECRET123");
+        assertTrue(screen.isTestWelcomeRedirectTriggered(), "Should successfully authenticate even with accidental whitespace padding");
+    }
 }

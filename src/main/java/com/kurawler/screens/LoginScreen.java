@@ -215,6 +215,7 @@ public class LoginScreen extends BaseScreen {
     public void reset() {
         if (tfUsername != null) tfUsername.clear();
         if (tfPassword != null) tfPassword.clear();
+        if (lblError != null) lblError.setText(""); 
         hideError();
     }
 

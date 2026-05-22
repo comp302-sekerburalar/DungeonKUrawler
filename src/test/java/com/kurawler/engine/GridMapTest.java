@@ -63,10 +63,8 @@ public class GridMapTest {
         }, "The constructor should throw an exception if column sizes are negative");
     }
 
-    
 
-
-/** 
+    /** 
  * Tests for IsPassable method and its 4 test cases:
  * 1. Out-of-bounds positions should return false.
  * 2. Tiles that are walls should return false.
@@ -81,7 +79,6 @@ public void testIsPassableOutOfBounds() {
     assertFalse(map.isPassable(new Vec2(-1, 2)));
     assertFalse(map.isPassable(new Vec2(10, 10)));
 }
-
 
 @Test
 public void testIsPassableWallTile() {
@@ -122,4 +119,8 @@ public void testIsPassableReturnsTrueOnEmptyFloor() {
 }
 
 
+    
+
+
 }
+

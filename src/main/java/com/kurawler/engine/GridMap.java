@@ -28,6 +28,10 @@ import java.util.*;
     //      - objects.get(pos) != null and must not be empty.
     //      - Every GameObject obj in objects.get(pos) must satisfy obj.getPos().equals(pos).
 
+
+
+
+
 public class GridMap {
 
     private final int cols;
@@ -94,6 +98,7 @@ public class GridMap {
      *  - Any STATIC-type GameObject on the cell
      */
 
+    
     /**
      * Method spesification for isPassable:
      * Determines if a given position on the grid map is passable for a moving entity (hero or enemy).  
@@ -111,6 +116,8 @@ public class GridMap {
      * returns true otherwise (the cell is passable).
      * 
      */
+
+
 
     
     public boolean isPassable(Vec2 pos) {
@@ -179,6 +186,7 @@ public class GridMap {
         return result;
     }
 
+
     /**
      * Checks if the representation invariant holds true.
      * @throws AssertionError if the representation invariant is violated.
@@ -214,5 +222,8 @@ public class GridMap {
             }
         }
     }
+
+
+   
 
 }

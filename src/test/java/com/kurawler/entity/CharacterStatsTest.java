@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class CharacterStatsTest {
 
+    // Checks normal modify behavior when the result stays between 0 and max.
     @Test
     public void modifyIncreasesStatWithinMaximum() {
         CharacterStats stats = new CharacterStats(10, 5, 3, 2, 20);
@@ -18,6 +19,7 @@ public class CharacterStatsTest {
         assertEquals(8, stats.get(StatType.HP));
     }
 
+    // Checks that modify does not allow HP to go above its maximum value.
     @Test
     public void modifyDoesNotIncreaseAboveMaximum() {
         CharacterStats stats = new CharacterStats(10, 5, 3, 2, 20);
@@ -28,6 +30,8 @@ public class CharacterStatsTest {
         assertEquals(10, stats.get(StatType.HP));
     }
 
+    
+    // Checks that modify does not allow MANA to go below zero.
     @Test
     public void modifyDoesNotDecreaseBelowZero() {
         CharacterStats stats = new CharacterStats(10, 5, 3, 2, 20);

@@ -17,41 +17,65 @@ import java.util.function.Consumer;
  * Central game engine: owns the map, hero, enemy list, and the game-tick timer.
  *
  * Responsibilities:
- *  – Move hero (with collision check and energy drain)
- *  – Query adjacent objects for the 3×3 interaction radius
- *  – Execute actions
- *  – Spawn enemies on a timer (spec §2.5: every 9 s, max 5)
- *  – Run enemy AI ticks
- *  – Notify the UI layer via callbacks
+ * – Move hero (with collision check and energy drain)
+ * – Query adjacent objects for the 3×3 interaction radius
+ * – Execute actions
+ * – Spawn enemies on a timer (spec §2.5: every 9 s, max 5)
+ * – Run enemy AI ticks
+ * – Notify the UI layer via callbacks
+ */
+
+/*
+ * Overview:
+ * GameEngine manages the core state and behavior of the dungeon game.
+ * It controls the map, hero, enemies, object interactions,
+ * enemy spawning, and game update timers.
+ *
+ * Abstract Function:
+ * AF(map, hero, enemies) =
+ * the current playable game state consisting of:
+ * - the dungeon map layout
+ * - the hero state and position
+ * - the active enemy entities
+ * - game interaction and spawning logic
+ *
+ * Representation Invariant:
+ * - map != null
+ * - hero != null
+ * - enemies != null
+ * - enemies.size() <= MAX_ENEMIES
+ * - no enemy in enemies is null
+ * - rng != null
  */
 public class GameEngine {
 
     // ---------- Spec constants ----------
-    private static final int    SPAWN_INTERVAL_S = 9;
-    private static final int    MAX_ENEMIES      = 5;
-    private static final double SPAWN_PROBABILITY_KNIGHT   = 0.60;
+    private static final int SPAWN_INTERVAL_S = 9;
+    private static final int MAX_ENEMIES = 5;
+    private static final double SPAWN_PROBABILITY_KNIGHT = 0.60;
     private static final double SPAWN_PROBABILITY_SORCERER = 0.30;
     // remaining 10 % = no spawn
 
     // ---------- Core state ----------
-    private final GridMap        map;
-    private final Hero           hero;
-    private final List<Enemy>    enemies = new ArrayList<>();
-    private final Random         rng     = new Random();
-    private       int            enemyIdCounter = 0;
+    private final GridMap map;
+    private final Hero hero;
+    private final List<Enemy> enemies = new ArrayList<>();
+    // private final Random rng = new Random();
+    private Random rng = new Random();
+    private int enemyIdCounter = 0;
 
     // ---------- UI callbacks ----------
-    private Runnable         onMapChanged;
-    private Runnable         onStatsChanged;
+    private Runnable onMapChanged;
+    private Runnable onStatsChanged;
     private Consumer<String> onMessage;
-    private Consumer<String> onAiLog;   // receives enemy AI state strings
+    private Consumer<String> onAiLog; // receives enemy AI state strings
 
     // ---------- Timelines ----------
     private Timeline spawnTimer;
     private Timeline aiTimer;
 
     // =========================================================================
-    //  Construction & initialisation
+    // Construction & initialisation
     // =========================================================================
 
     public GameEngine() {
@@ -68,10 +92,10 @@ public class GameEngine {
 
     /**
      * Build a small demonstrable map:
-     *   – a few wall segments to test collision
-     *   – a key (passable item) the hero can walk over and pick up
-     *   – a crate (blocking) the hero cannot pass through
-     *   – a red potion to demonstrate stat change
+     * – a few wall segments to test collision
+     * – a key (passable item) the hero can walk over and pick up
+     * – a crate (blocking) the hero cannot pass through
+     * – a red potion to demonstrate stat change
      */
     private void populateTestMap() {
         // Internal wall segment (column 8, rows 3-7)
@@ -103,7 +127,7 @@ public class GameEngine {
     }
 
     // =========================================================================
-    //  Lifecycle
+    // Lifecycle
     // =========================================================================
 
     public void start() {
@@ -122,7 +146,7 @@ public class GameEngine {
     }
 
     // =========================================================================
-    //  Hero movement (spec §1.1)
+    // Hero movement (spec §1.1)
     // =========================================================================
 
     /**
@@ -147,7 +171,7 @@ public class GameEngine {
     }
 
     // =========================================================================
-    //  3×3 Interaction (spec §1.2)
+    // 3×3 Interaction (spec §1.2)
     // =========================================================================
 
     /**
@@ -179,7 +203,8 @@ public class GameEngine {
         }
         return obj.getActions();
 
-        // Inventory items are always accessible; inventory actions handled in UI directly.
+        // Inventory items are always accessible; inventory actions handled in UI
+        // directly.
     }
 
     /** Execute the chosen action on the object. */
@@ -188,10 +213,32 @@ public class GameEngine {
     }
 
     // =========================================================================
-    //  Enemy spawning (spec §2.5)
+    // Enemy spawning (spec §2.5)
     // =========================================================================
-
-    private void spawnEnemy() {
+    /**
+     * Spawns a new enemy on a valid edge floor cell based on spawn probabilities.
+     *
+     * Requires:
+     * - rng, map, hero, and enemies are initialized
+     * - SPAWN_PROBABILITY_KNIGHT + SPAWN_PROBABILITY_SORCERER <= 1
+     *
+     * Modifies:
+     * - enemies
+     * - enemyIdCounter
+     * - game messages
+     *
+     * Effects:
+     * - may create and add a new enemy if spawn conditions are satisfied
+     * - does not spawn an enemy if:
+     * - random roll exceeds spawn probabilities
+     * - maximum number of enemies already exists
+     * - no valid spawn positions are available
+     * - posts status messages
+     * - notifies observers when map changes
+     */
+    // For testing purposes its not private now. In original code this function is
+    // private
+    void spawnEnemy() {
         double roll = rng.nextDouble();
 
         if (roll > SPAWN_PROBABILITY_KNIGHT + SPAWN_PROBABILITY_SORCERER) {
@@ -206,7 +253,8 @@ public class GameEngine {
         Enemy.Type type = roll < SPAWN_PROBABILITY_KNIGHT ? Enemy.Type.KNIGHT : Enemy.Type.SORCERER;
 
         List<Vec2> candidates = map.edgeFloorCells();
-        if (candidates.isEmpty()) return;
+        if (candidates.isEmpty())
+            return;
 
         // Filter out cells occupied by the hero or another enemy
         Vec2 heroPos = hero.getPos();
@@ -214,11 +262,12 @@ public class GameEngine {
         occupied.add(heroPos);
         enemies.forEach(e -> occupied.add(e.getPos()));
         candidates.removeIf(occupied::contains);
-        if (candidates.isEmpty()) return;
+        if (candidates.isEmpty())
+            return;
 
         Vec2 spawnPos = candidates.get(rng.nextInt(candidates.size()));
-        String id     = String.valueOf(++enemyIdCounter);
-        Enemy enemy   = new Enemy(id, type, spawnPos);
+        String id = String.valueOf(++enemyIdCounter);
+        Enemy enemy = new Enemy(id, type, spawnPos);
         enemies.add(enemy);
 
         String msg = "[Spawn] " + type + " #" + id + " spawned at " + spawnPos;
@@ -228,7 +277,7 @@ public class GameEngine {
     }
 
     // =========================================================================
-    //  Enemy AI tick
+    // Enemy AI tick
     // =========================================================================
 
     private void tickEnemies() {
@@ -244,29 +293,95 @@ public class GameEngine {
     }
 
     // =========================================================================
-    //  UI notification helpers
+    // UI notification helpers
     // =========================================================================
 
-    public void notifyMapChanged()   { if (onMapChanged   != null) onMapChanged.run(); }
-    public void notifyStatsChanged() { if (onStatsChanged != null) onStatsChanged.run(); }
+    public void notifyMapChanged() {
+        if (onMapChanged != null)
+            onMapChanged.run();
+    }
+
+    public void notifyStatsChanged() {
+        if (onStatsChanged != null)
+            onStatsChanged.run();
+    }
 
     public void postMessage(String msg) {
         System.out.println("[Engine] " + msg);
-        if (onMessage != null) onMessage.accept(msg);
+        if (onMessage != null)
+            onMessage.accept(msg);
     }
 
     // ---------- Callback registration ----------
 
-    public void setOnMapChanged(Runnable r)         { onMapChanged   = r; }
-    public void setOnStatsChanged(Runnable r)       { onStatsChanged = r; }
-    public void setOnMessage(Consumer<String> c)    { onMessage      = c; }
-    public void setOnAiLog(Consumer<String> c)      { onAiLog        = c; }
+    public void setOnMapChanged(Runnable r) {
+        onMapChanged = r;
+    }
+
+    public void setOnStatsChanged(Runnable r) {
+        onStatsChanged = r;
+    }
+
+    public void setOnMessage(Consumer<String> c) {
+        onMessage = c;
+    }
+
+    public void setOnAiLog(Consumer<String> c) {
+        onAiLog = c;
+    }
 
     // =========================================================================
-    //  Accessors
+    // Accessors
     // =========================================================================
 
-    public GridMap      getMap()     { return map; }
-    public Hero         getHero()    { return hero; }
-    public List<Enemy>  getEnemies() { return Collections.unmodifiableList(enemies); }
+    public GridMap getMap() {
+        return map;
+    }
+
+    public Hero getHero() {
+        return hero;
+    }
+
+    public List<Enemy> getEnemies() {
+        return Collections.unmodifiableList(enemies);
+    }
+
+    // TESTERS
+
+    public void setRandom(Random random) {
+        this.rng = random;
+    }
+
+    public int getMaxEnemies() {
+        return MAX_ENEMIES;
+    }
+
+    public void addEnemyForTest(Enemy enemy) {
+        enemies.add(enemy);
+    }
+
+    public boolean repOk() {
+
+        if (map == null)
+            return false;
+
+        if (hero == null)
+            return false;
+
+        if (enemies == null)
+            return false;
+
+        if (rng == null)
+            return false;
+
+        if (enemies.size() > MAX_ENEMIES)
+            return false;
+
+        for (Enemy e : enemies) {
+            if (e == null)
+                return false;
+        }
+
+        return true;
+    }
 }

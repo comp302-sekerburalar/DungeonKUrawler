@@ -24,6 +24,21 @@ public class Inventory {
     public int     size()    { return slots.size(); }
 
     /** Add an item; returns false if inventory is full. */
+    /**
+ * Adds the given GameObject to the inventory if there is available space.
+ *
+ * Requires:
+ * - item is not null.
+ * - The inventory object is properly initialized.
+ *
+ * Modifies:
+ * - This inventory's internal slots list, only if the inventory is not full.
+ *
+ * Effects:
+ * - If the inventory has fewer than CAPACITY items, adds item to the end of the inventory,
+ *   increases size by 1, and returns true.
+ * - If the inventory is already full, does not modify the inventory and returns false.
+ */
     public boolean add(GameObject item) {
         if (isFull()) return false;
         slots.add(item);

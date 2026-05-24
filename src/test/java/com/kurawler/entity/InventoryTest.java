@@ -1,3 +1,24 @@
+/**
+ * Adds the given GameObject to the inventory if there is available space.
+ *
+ * Requires:
+ * - item is not null.
+ * - The inventory object is properly initialized.
+ *
+ * Modifies:
+ * - This inventory's internal slots list, only if the inventory is not full.
+ *
+ * Effects:
+ * - If the inventory has fewer than CAPACITY items, adds item to the end of the inventory,
+ *   increases size by 1, and returns true.
+ * - If the inventory is already full, does not modify the inventory and returns false.
+ */
+public boolean add(GameObject item) {
+    if (isFull()) return false;
+    slots.add(item);
+    return true;
+}
+
 package com.kurawler.game.entity;
 
 import com.kurawler.engine.Vec2;
@@ -11,6 +32,12 @@ public class InventoryTest {
 
     @Test
     public void addItemToEmptyInventorySucceeds() {
+        /*
+         * This test checks the normal behavior of the add method.
+         * The inventory starts empty, so adding one item should succeed.
+         * The method should return true, the inventory size should become 1,
+         * and the added item should be stored at index 0.
+         */
         Inventory inventory = new Inventory();
         GameObject key = GameObjects.key(new Vec2(0, 0));
 
@@ -23,6 +50,13 @@ public class InventoryTest {
 
     @Test
     public void addItemToFullInventoryFails() {
+        /*
+         * This test checks the capacity boundary of the add method.
+         * First, the inventory is filled up to its maximum capacity.
+         * Then, the test tries to add one extra item.
+         * Since the inventory is already full, add should return false
+         * and the inventory size should stay equal to CAPACITY.
+         */
         Inventory inventory = new Inventory();
 
         for (int i = 0; i < Inventory.CAPACITY; i++) {
@@ -38,6 +72,12 @@ public class InventoryTest {
 
     @Test
     public void addMultipleItemsPreservesOrder() {
+        /*
+         * This test checks that the inventory keeps items in the same order
+         * in which they were added.
+         * The key is added first, the gem second, and the potion third.
+         * Therefore, they should be stored at indexes 0, 1, and 2 in that order.
+         */
         Inventory inventory = new Inventory();
 
         GameObject key = GameObjects.key(new Vec2(0, 0));

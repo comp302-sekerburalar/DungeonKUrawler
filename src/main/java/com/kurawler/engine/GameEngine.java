@@ -2,266 +2,211 @@ package com.kurawler.engine;
 
 import com.kurawler.game.action.Action;
 import com.kurawler.game.entity.*;
-import com.kurawler.game.objects.GameObjects;
-import com.kurawler.game.objects.GameObject;
+import com.kurawler.game.objects.*;
 
-import javafx.animation.Animation;
-import javafx.animation.KeyFrame;
-import javafx.animation.Timeline;
+import javafx.animation.*;
 import javafx.util.Duration;
 
 import java.util.*;
 import java.util.function.Consumer;
 
 /**
- * Central game engine: owns the map, hero, enemy list, and the game-tick timer.
+ * Central game engine (spec §1–4).
  *
- * Responsibilities:
- * – Move hero (with collision check and energy drain)
- * – Query adjacent objects for the 3×3 interaction radius
- * – Execute actions
- * – Spawn enemies on a timer (spec §2.5: every 9 s, max 5)
- * – Run enemy AI ticks
- * – Notify the UI layer via callbacks
- */
-
-/*
- * Overview:
- * GameEngine manages the core state and behavior of the dungeon game.
- * It controls the map, hero, enemies, object interactions,
- * enemy spawning, and game update timers.
- *
- * Abstract Function:
- * AF(map, hero, enemies) =
- * the current playable game state consisting of:
- * - the dungeon map layout
- * - the hero state and position
- * - the active enemy entities
- * - game interaction and spawning logic
- *
- * Representation Invariant:
- * - map != null
- * - hero != null
- * - enemies != null
- * - enemies.size() <= MAX_ENEMIES
- * - no enemy in enemies is null
- * - rng != null
+ * Owns: GridMap, Hero, enemies, projectiles, timers.
+ * Notifies the UI layer via callback lambdas.
  */
 public class GameEngine {
 
-    // ---------- Spec constants ----------
+    // ── spec constants ──
     private static final int SPAWN_INTERVAL_S = 9;
     private static final int MAX_ENEMIES = 5;
-    private static final double SPAWN_PROBABILITY_KNIGHT = 0.60;
-    private static final double SPAWN_PROBABILITY_SORCERER = 0.30;
-    // remaining 10 % = no spawn
+    private static final double SPAWN_KNIGHT_PROB = 0.60;
+    private static final double SPAWN_SORCERER_PROB = 0.30;
 
-    // ---------- Core state ----------
+    // ── state ──
     private final GridMap map;
     private final Hero hero;
     private final List<Enemy> enemies = new ArrayList<>();
-    // private final Random rng = new Random();
-    private Random rng = new Random();
+    private final List<Projectile> projectiles = new ArrayList<>();
+    private final Random rng = new Random();
     private int enemyIdCounter = 0;
+    private boolean gameOver = false;
+    private boolean victory = false;
 
-    // ---------- UI callbacks ----------
+    // ── target relic (spec §4.1) ──
+    private String targetRelicName = null;
+
+    // ── UI callbacks ──
     private Runnable onMapChanged;
     private Runnable onStatsChanged;
+    private Runnable onInventoryChanged;
     private Consumer<String> onMessage;
-    private Consumer<String> onAiLog; // receives enemy AI state strings
+    private Consumer<String> onAiLog;
+    private Runnable onGameOver;
+    private Runnable onVictory;
 
-    // ---------- Timelines ----------
+    // ── timers ──
     private Timeline spawnTimer;
     private Timeline aiTimer;
+    private Timeline knightAttackTimer;
+    private int knightAttackCooldown = 0;
 
     // =========================================================================
-    // Construction & initialisation
-    // =========================================================================
-
-    public GameEngine() {
-        map = new GridMap(20, 15);
-        map.buildBorderWalls();
-
-        // Hero STR is random 8-15 (spec §2.4.1)
-        int str = 8 + rng.nextInt(8);
-        hero = new Hero("Hero", new Vec2(5, 5), str);
-
-        populateTestMap();
-        initTimers();
+    /** Standard constructor — generates a random map. */
+    public GameEngine(String heroName) {
+        this(heroName, null);
     }
 
     /**
-     * Build a small demonstrable map:
-     * – a few wall segments to test collision
-     * – a key (passable item) the hero can walk over and pick up
-     * – a crate (blocking) the hero cannot pass through
-     * – a red potion to demonstrate stat change
+     * Constructor that accepts a pre-built GridMap from the editor.
+     * If existingMap is null a random map is generated.
      */
-    private void populateTestMap() {
-        // Internal wall segment (column 8, rows 3-7)
-        for (int r = 3; r <= 7; r++) {
-            map.setTile(new Vec2(8, r), TileType.WALL);
+    public GameEngine(String heroName, GridMap existingMap) {
+        int str = 8 + rng.nextInt(8);
+        hero = new Hero(heroName, new Vec2(5, 5), str);
+
+        if (existingMap != null) {
+            map = existingMap;
+        } else {
+            map = MapGenerator.generate(20, 15);
         }
-
-        // Crate at (12, 7) – blocks movement
-        map.placeObject(GameObjects.crate(new Vec2(12, 7)));
-
-        // Key at (6, 5) – passable, hero starts at (5,5) and can walk onto it
-        map.placeObject(GameObjects.key(new Vec2(6, 5)));
-
-        // Gem at (3, 8)
-        map.placeObject(GameObjects.gem(new Vec2(3, 8)));
-
-        // Red potion at (7, 5) – TAKE + drink to restore HP
-        map.placeObject(GameObjects.redPotion(new Vec2(7, 5)));
+        chooseTargetRelic();
+        hideRelicInMap();
+        initTimers();
     }
 
+    // ── target relic ──
+    private void chooseTargetRelic() {
+        String[] relics = { "Crystal Orb", "Golden Ring", "Diamond", "Ancient Key", "Magic Amulet" };
+        targetRelicName = relics[rng.nextInt(relics.length)];
+    }
+
+    /**
+     * Create the relic item and hide it in a container on the map.
+     * Called after map generation and relic selection.
+     */
+    private void hideRelicInMap() {
+        // Create the relic as a named game object
+        com.kurawler.game.objects.GameObject relicObj = com.kurawler.game.objects.GameObjects.relicItem(targetRelicName,
+                new Vec2(0, 0));
+        // 60% chance relic chest, 40% chance searchable wall/box
+        boolean useChest = rng.nextDouble() < 0.6;
+        MapGenerator.placeRelicContainers(map, relicObj, useChest);
+    }
+
+    public String getTargetRelicName() {
+        return targetRelicName;
+    }
+
+    // ── timers ──
     private void initTimers() {
-        // Enemy spawn every 9 seconds (spec §2.5)
         spawnTimer = new Timeline(new KeyFrame(Duration.seconds(SPAWN_INTERVAL_S), e -> spawnEnemy()));
         spawnTimer.setCycleCount(Animation.INDEFINITE);
 
-        // Enemy AI tick every 1 second (design decision: readable in the demo)
-        aiTimer = new Timeline(new KeyFrame(Duration.seconds(1), e -> tickEnemies()));
+        aiTimer = new Timeline(new KeyFrame(Duration.seconds(1), e -> tickAI()));
         aiTimer.setCycleCount(Animation.INDEFINITE);
-    }
 
-    // =========================================================================
-    // Lifecycle
-    // =========================================================================
+        // Knights attack every 1.5s if adjacent
+        knightAttackTimer = new Timeline(new KeyFrame(Duration.seconds(1.5), e -> knightMeleeAttacks()));
+        knightAttackTimer.setCycleCount(Animation.INDEFINITE);
+    }
 
     public void start() {
         spawnTimer.play();
         aiTimer.play();
+        knightAttackTimer.play();
     }
 
     public void pause() {
         spawnTimer.pause();
         aiTimer.pause();
+        knightAttackTimer.pause();
     }
 
     public void resume() {
         spawnTimer.play();
         aiTimer.play();
+        knightAttackTimer.play();
+    }
+
+    public void stop() {
+        spawnTimer.stop();
+        aiTimer.stop();
+        knightAttackTimer.stop();
     }
 
     // =========================================================================
     // Hero movement (spec §1.1)
     // =========================================================================
-
-    /**
-     * Attempt to move the hero one cell in direction (dc, dr).
-     * Blocks on WALL base tiles and STATIC GameObjects.
-     * Passes through ITEM tiles.
-     * Drains ENERGY_COST_WALK energy (spec §2.4.1).
-     */
     public boolean moveHero(int dc, int dr) {
+        if (gameOver)
+            return false;
         Vec2 target = hero.getPos().add(dc, dr);
-
         if (!map.isPassable(target)) {
             postMessage("Blocked!");
             return false;
         }
-
         hero.setPos(target);
         hero.spendEnergy(Hero.ENERGY_COST_WALK);
+        checkVictoryCondition();
         notifyStatsChanged();
         notifyMapChanged();
         return true;
     }
 
     // =========================================================================
-    // 3×3 Interaction (spec §1.2)
+    // Interaction (spec §1.2)
     // =========================================================================
-
-    /**
-     * Returns all GameObjects in the 3×3 area centred on the hero,
-     * excluding the hero's own tile if you want only neighbours –
-     * but the spec says "next to the player" so we include all 8+centre.
-     */
-    public List<GameObject> getInteractableObjects() {
-        List<GameObject> result = new ArrayList<>();
-        Vec2 h = hero.getPos();
-        for (int dc = -1; dc <= 1; dc++) {
-            for (int dr = -1; dr <= 1; dr++) {
-                Vec2 cell = h.add(dc, dr);
-                if (cell.inBounds(map.getCols(), map.getRows())) {
-                    result.addAll(map.objectsAt(cell));
-                }
-            }
-        }
-        return result;
-    }
-
-    /**
-     * Returns the actions available for a given object,
-     * or empty list if the hero is NOT within the 3×3 area (spec §1.2).
-     */
     public List<Action> getActionsFor(GameObject obj) {
-        if (!map.isAdjacent(hero.getPos(), obj.getPos())) {
+        if (!map.isAdjacent(hero.getPos(), obj.getPos()))
             return Collections.emptyList();
-        }
         return obj.getActions();
-
-        // Inventory items are always accessible; inventory actions handled in UI
-        // directly.
     }
 
-    /** Execute the chosen action on the object. */
     public void executeAction(Action action, GameObject subject) {
         action.execute(this, subject);
     }
 
     // =========================================================================
+    // Hero attack on enemy (spec §2.6)
+    // =========================================================================
+    public void heroAttackEnemy(Enemy enemy) {
+        if (!map.isAdjacent(hero.getPos(), enemy.getPos())) {
+            postMessage("Too far away to attack!");
+            return;
+        }
+        if (!hero.hasWeaponEquipped()) {
+            postMessage("Equip a weapon first!");
+            return;
+        }
+        int dmg = CombatSystem.heroAttack(hero, enemy);
+        postMessage("Hit " + enemy.getType() + " for " + dmg + " damage! " +
+                "(HP left: " + enemy.getStat(StatType.HP) + ")");
+        if (!enemy.isAlive()) {
+            enemies.remove(enemy);
+            postMessage(enemy.getType() + " #" + enemy.getId() + " defeated!");
+        }
+        notifyStatsChanged();
+        notifyMapChanged();
+    }
+
+    // =========================================================================
     // Enemy spawning (spec §2.5)
     // =========================================================================
-    /**
-     * Spawns a new enemy on a valid edge floor cell based on spawn probabilities.
-     *
-     * Requires:
-     * - rng, map, hero, and enemies are initialized
-     * - SPAWN_PROBABILITY_KNIGHT + SPAWN_PROBABILITY_SORCERER <= 1
-     *
-     * Modifies:
-     * - enemies
-     * - enemyIdCounter
-     * - game messages
-     *
-     * Effects:
-     * - may create and add a new enemy if spawn conditions are satisfied
-     * - does not spawn an enemy if:
-     * - random roll exceeds spawn probabilities
-     * - maximum number of enemies already exists
-     * - no valid spawn positions are available
-     * - posts status messages
-     * - notifies observers when map changes
-     */
-    // For testing purposes its not private now. In original code this function is
-    // private
-    void spawnEnemy() {
+    private void spawnEnemy() {
+        if (gameOver || enemies.size() >= MAX_ENEMIES)
+            return;
         double roll = rng.nextDouble();
-
-        if (roll > SPAWN_PROBABILITY_KNIGHT + SPAWN_PROBABILITY_SORCERER) {
-            postMessage("[Spawn] No new enemy this cycle.");
+        if (roll > SPAWN_KNIGHT_PROB + SPAWN_SORCERER_PROB) {
+            postMessage("[Spawn] No enemy this cycle.");
             return;
         }
-        if (enemies.size() >= MAX_ENEMIES) {
-            postMessage("[Spawn] Max enemies reached, skipping spawn.");
-            return;
-        }
-
-        Enemy.Type type = roll < SPAWN_PROBABILITY_KNIGHT ? Enemy.Type.KNIGHT : Enemy.Type.SORCERER;
+        Enemy.Type type = roll < SPAWN_KNIGHT_PROB ? Enemy.Type.KNIGHT : Enemy.Type.SORCERER;
 
         List<Vec2> candidates = map.edgeFloorCells();
-        if (candidates.isEmpty())
-            return;
-
-        // Filter out cells occupied by the hero or another enemy
-        Vec2 heroPos = hero.getPos();
-        Set<Vec2> occupied = new HashSet<>();
-        occupied.add(heroPos);
-        enemies.forEach(e -> occupied.add(e.getPos()));
-        candidates.removeIf(occupied::contains);
+        candidates.removeIf(v -> v.equals(hero.getPos()));
+        enemies.forEach(e -> candidates.remove(e.getPos()));
         if (candidates.isEmpty())
             return;
 
@@ -270,32 +215,116 @@ public class GameEngine {
         Enemy enemy = new Enemy(id, type, spawnPos);
         enemies.add(enemy);
 
-        String msg = "[Spawn] " + type + " #" + id + " spawned at " + spawnPos;
-        System.out.println(msg);
-        postMessage(msg);
+        postMessage("[Spawn] " + type + " #" + id + " appeared at " + spawnPos);
         notifyMapChanged();
     }
 
     // =========================================================================
-    // Enemy AI tick
+    // AI tick
     // =========================================================================
-
-    private void tickEnemies() {
+    private void tickAI() {
+        if (gameOver)
+            return;
         StringBuilder log = new StringBuilder();
+        List<Enemy> toRemove = new ArrayList<>();
+
         for (Enemy e : enemies) {
             String status = e.tick(hero.getPos(), map);
             log.append(status).append("\n");
+
+            // Handle sorcerer projectile
+            Vec2 projTarget = e.consumePendingProjectile();
+            if (projTarget != null) {
+                projectiles.add(new Projectile(e.getPos(), projTarget, e));
+                postMessage("Sorcerer #" + e.getId() + " fires a projectile!");
+            }
         }
-        if (onAiLog != null && !enemies.isEmpty()) {
+
+        // Advance projectiles
+        List<Projectile> deadProjectiles = new ArrayList<>();
+        for (Projectile p : projectiles) {
+            p.advance(map);
+            if (!p.isActive()) {
+                deadProjectiles.add(p);
+                continue;
+            }
+            // Check hero collision
+            if (p.getPos().equals(hero.getPos())) {
+                int dmg = CombatSystem.projectileHitsHero(hero);
+                postMessage("Projectile hit you for " + dmg + " damage!");
+                p.destroy();
+                deadProjectiles.add(p);
+                notifyStatsChanged();
+                checkDeath();
+            }
+        }
+        projectiles.removeAll(deadProjectiles);
+
+        if (onAiLog != null && !enemies.isEmpty())
             onAiLog.accept(log.toString().trim());
-        }
         notifyMapChanged();
     }
 
     // =========================================================================
-    // UI notification helpers
+    // Knight melee attacks
     // =========================================================================
+    private void knightMeleeAttacks() {
+        if (gameOver)
+            return;
+        for (Enemy e : enemies) {
+            if (e.getType() != Enemy.Type.KNIGHT)
+                continue;
+            if (e.isAdjacentTo(hero.getPos())) {
+                int dmg = CombatSystem.enemyAttackHero(e, hero);
+                postMessage("Knight #" + e.getId() + " hits you for " + dmg + " damage!");
+                notifyStatsChanged();
+                checkDeath();
+            }
+        }
+    }
 
+    // =========================================================================
+    // Win / lose checks
+    // =========================================================================
+    private void checkDeath() {
+        if (!hero.isAlive() && !gameOver) {
+            gameOver = true;
+            stop();
+            postMessage("YOU DIED! Game over.");
+            if (onGameOver != null)
+                onGameOver.run();
+        }
+    }
+
+    private void checkVictoryCondition() {
+        // Check inventory for the relic item (added when container is searched/opened)
+        for (var item : hero.getInventory().all()) {
+            if (item.getName().equalsIgnoreCase(targetRelicName)) {
+                triggerVictory();
+                return;
+            }
+        }
+    }
+
+    private void triggerVictory() {
+        if (victory)
+            return;
+        victory = true;
+        gameOver = true;
+        stop();
+        postMessage("✨ You found the " + targetRelicName + "! VICTORY! ✨");
+        if (onVictory != null)
+            onVictory.run();
+    }
+
+    // Called by inventory actions after adding an item
+    public void checkVictoryAfterPickup() {
+        checkVictoryCondition();
+    }
+
+    // =========================================================================
+    // Notifications
+    // =========================================================================
     public void notifyMapChanged() {
         if (onMapChanged != null)
             onMapChanged.run();
@@ -306,20 +335,29 @@ public class GameEngine {
             onStatsChanged.run();
     }
 
+    public void notifyInventoryChanged() {
+        if (onInventoryChanged != null)
+            onInventoryChanged.run();
+        checkVictoryAfterPickup();
+    }
+
     public void postMessage(String msg) {
         System.out.println("[Engine] " + msg);
         if (onMessage != null)
             onMessage.accept(msg);
     }
 
-    // ---------- Callback registration ----------
-
+    // ── callbacks ──
     public void setOnMapChanged(Runnable r) {
         onMapChanged = r;
     }
 
     public void setOnStatsChanged(Runnable r) {
         onStatsChanged = r;
+    }
+
+    public void setOnInventoryChanged(Runnable r) {
+        onInventoryChanged = r;
     }
 
     public void setOnMessage(Consumer<String> c) {
@@ -330,10 +368,15 @@ public class GameEngine {
         onAiLog = c;
     }
 
-    // =========================================================================
-    // Accessors
-    // =========================================================================
+    public void setOnGameOver(Runnable r) {
+        onGameOver = r;
+    }
 
+    public void setOnVictory(Runnable r) {
+        onVictory = r;
+    }
+
+    // ── accessors ──
     public GridMap getMap() {
         return map;
     }
@@ -346,42 +389,15 @@ public class GameEngine {
         return Collections.unmodifiableList(enemies);
     }
 
-    // TESTERS
-
-    public void setRandom(Random random) {
-        this.rng = random;
+    public List<Projectile> getProjectiles() {
+        return Collections.unmodifiableList(projectiles);
     }
 
-    public int getMaxEnemies() {
-        return MAX_ENEMIES;
+    public boolean isGameOver() {
+        return gameOver;
     }
 
-    public void addEnemyForTest(Enemy enemy) {
-        enemies.add(enemy);
-    }
-
-    public boolean repOk() {
-
-        if (map == null)
-            return false;
-
-        if (hero == null)
-            return false;
-
-        if (enemies == null)
-            return false;
-
-        if (rng == null)
-            return false;
-
-        if (enemies.size() > MAX_ENEMIES)
-            return false;
-
-        for (Enemy e : enemies) {
-            if (e == null)
-                return false;
-        }
-
-        return true;
+    public boolean isVictory() {
+        return victory;
     }
 }

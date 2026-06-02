@@ -1,34 +1,37 @@
 package com.kurawler.app;
 
 import javafx.application.Application;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
-import javafx.scene.image.Image;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 import com.kurawler.screens.ScreenManager;
 
-/**
- * Entry point for Dungeon KUrawler.
- * Initializes the JavaFX stage and hands control to the ScreenManager.
- */
 public class Main extends Application {
 
-    public static final String GAME_TITLE  = "Dungeon KUrawler";
-    public static final int    WINDOW_W    = 800;
-    public static final int    WINDOW_H    = 600;
-
     @Override
-    public void start(Stage primaryStage) {
-        ScreenManager manager = new ScreenManager(primaryStage);
+    public void start(Stage stage) {
+        // ── Fullscreen setup ──────────────────────────────────────────────────
+        Rectangle2D screen = Screen.getPrimary().getVisualBounds();
+        double W = screen.getWidth();
+        double H = screen.getHeight();
 
-        Scene scene = new Scene(manager.getRoot(), WINDOW_W, WINDOW_H);
+        ScreenManager manager = new ScreenManager(stage, W, H);
+
+        Scene scene = new Scene(manager.getRoot(), W, H);
         scene.getStylesheets().add(
-            getClass().getResource("/css/dungeon.css").toExternalForm()
-        );
+                getClass().getResource("/css/dungeon.css").toExternalForm());
 
-        primaryStage.setTitle(GAME_TITLE);
-        primaryStage.setResizable(false);
-        primaryStage.setScene(scene);
-        primaryStage.show();
+        stage.setTitle("Dungeon KUrawler");
+        stage.setScene(scene);
+        stage.setX(screen.getMinX());
+        stage.setY(screen.getMinY());
+        stage.setWidth(W);
+        stage.setHeight(H);
+        stage.setMaximized(true); // borderless maximized
+        stage.setResizable(true);
+        stage.show();
 
         manager.showMainMenu();
     }

@@ -5,20 +5,12 @@ import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.text.Text;
-import com.kurawler.components.DungeonButton;
-import com.kurawler.components.PixelBorder;
-import com.kurawler.components.PixelTextField;
-import com.kurawler.model.UserStore;
+import com.kurawler.components.*;
 
-/**
- * Login screen.
- * Validates credentials against UserStore and navigates to WelcomeScreen on success.
- */
 public class LoginScreen extends BaseScreen {
 
-    private PixelTextField tfUsername;
-    private PixelTextField tfPassword;
-    private Label          lblError;
+    private PixelTextField tfUser, tfPass;
+    private Label lblError;
 
     public LoginScreen(ScreenManager manager) {
         super(manager);
@@ -28,49 +20,38 @@ public class LoginScreen extends BaseScreen {
     protected Pane buildUI() {
         StackPane root = new StackPane();
         root.getStyleClass().add("dungeon-bg");
-        root.setPrefSize(800, 600);
+        root.setPrefSize(W(), H());
 
         VBox center = new VBox(0);
         center.setAlignment(Pos.CENTER);
         center.setMaxWidth(440);
 
-        // Mini title
-        Text miniTitle = new Text("KURAWLER");
-        miniTitle.getStyleClass().add("title-line2-small");
-        VBox titleWrap = new VBox(miniTitle);
-        titleWrap.setAlignment(Pos.CENTER);
-        titleWrap.setPadding(new Insets(0, 0, 16, 0));
+        Text mini = new Text("KURAWLER");
+        mini.getStyleClass().add("title-line2-small");
+        VBox tw = new VBox(mini);
+        tw.setAlignment(Pos.CENTER);
+        tw.setPadding(new Insets(0, 0, 16, 0));
 
-        // Tab-style header
         HBox tabs = new HBox(0);
-        tabs.setAlignment(Pos.CENTER_LEFT);
         tabs.setMaxWidth(440);
+        Button tLogin = new Button("LOGIN");
+        tLogin.getStyleClass().addAll("tab-btn", "tab-active");
+        tLogin.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(tLogin, Priority.ALWAYS);
+        Button tReg = new Button("REGISTER");
+        tReg.getStyleClass().add("tab-btn");
+        tReg.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(tReg, Priority.ALWAYS);
+        tReg.setOnAction(e -> manager.showRegister());
+        tabs.getChildren().addAll(tLogin, tReg);
 
-        Button tabLogin = new Button("LOGIN");
-        tabLogin.getStyleClass().addAll("tab-btn", "tab-active");
-        tabLogin.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(tabLogin, Priority.ALWAYS);
-
-        Button tabRegister = new Button("REGISTER");
-        tabRegister.getStyleClass().add("tab-btn");
-        tabRegister.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(tabRegister, Priority.ALWAYS);
-
-        tabRegister.setOnAction(e -> manager.showRegister());
-        tabLogin.setOnAction(e -> {});   // already here
-
-        tabs.getChildren().addAll(tabLogin, tabRegister);
-
-        // Stone top
         Pane stoneTop = PixelBorder.stoneTop(440);
 
-        // Form panel
         VBox form = new VBox(14);
         form.setPadding(new Insets(24, 32, 24, 32));
         form.getStyleClass().add("panel-surface");
         form.setMaxWidth(440);
 
-        // Error label (hidden by default)
         lblError = new Label("");
         lblError.getStyleClass().add("error-label");
         lblError.setVisible(false);
@@ -78,79 +59,66 @@ public class LoginScreen extends BaseScreen {
         lblError.setMaxWidth(Double.MAX_VALUE);
         lblError.setWrapText(true);
 
-        // Username
-        VBox userGroup = fieldGroup("HERO NAME");
-        tfUsername = new PixelTextField("ENTER NAME...");
-        userGroup.getChildren().add(tfUsername);
+        VBox ug = fieldGroup("HERO NAME");
+        tfUser = new PixelTextField("ENTER NAME...");
+        ug.getChildren().add(tfUser);
+        VBox pg = fieldGroup("PASSWORD");
+        tfPass = new PixelTextField("••••••••", true);
+        pg.getChildren().add(tfPass);
 
-        // Password
-        VBox passGroup = fieldGroup("PASSWORD");
-        tfPassword = new PixelTextField("••••••••", true);
-        passGroup.getChildren().add(tfPassword);
+        CheckBox rem = new CheckBox("REMEMBER ME");
+        rem.getStyleClass().add("pixel-checkbox");
+        HBox remRow = new HBox(10, rem);
+        remRow.setAlignment(Pos.CENTER_LEFT);
 
-        // Remember me checkbox
-        HBox rememberRow = new HBox(10);
-        rememberRow.setAlignment(Pos.CENTER_LEFT);
-        CheckBox rememberBox = new CheckBox("REMEMBER ME");
-        rememberBox.getStyleClass().add("pixel-checkbox");
-        rememberRow.getChildren().add(rememberBox);
-
-        // Submit button
         DungeonButton btnEnter = new DungeonButton("ENTER THE DUNGEON", true);
         btnEnter.setMaxWidth(Double.MAX_VALUE);
         btnEnter.setOnAction(e -> attemptLogin());
 
-        form.getChildren().addAll(lblError, userGroup, passGroup, rememberRow, btnEnter);
-
-        // Stone bottom
+        form.getChildren().addAll(lblError, ug, pg, remRow, btnEnter);
         Pane stoneBottom = PixelBorder.stoneBottom(440);
 
-        // Back link
         Button btnBack = new Button("◄  BACK TO MAIN MENU");
         btnBack.getStyleClass().add("link-btn");
-        VBox backWrap = new VBox(btnBack);
-        backWrap.setAlignment(Pos.CENTER);
-        backWrap.setPadding(new Insets(12, 0, 0, 0));
+        VBox bw = new VBox(btnBack);
+        bw.setAlignment(Pos.CENTER);
+        bw.setPadding(new Insets(12, 0, 0, 0));
         btnBack.setOnAction(e -> manager.showMainMenu());
 
-        center.getChildren().addAll(titleWrap, tabs, stoneTop, form, stoneBottom, backWrap);
+        center.getChildren().addAll(tw, tabs, stoneTop, form, stoneBottom, bw);
         root.getChildren().add(center);
 
-        // ENTER key submits
         root.setOnKeyPressed(e -> {
             switch (e.getCode()) {
-                case ENTER  -> attemptLogin();
+                case ENTER -> attemptLogin();
                 case ESCAPE -> manager.showMainMenu();
-                default -> {}
+                default -> {
+                }
             }
         });
         root.setFocusTraversable(true);
-
         return root;
     }
 
-    // ---------- Logic ----------
-
     private void attemptLogin() {
-        String user = tfUsername.getText().trim();
-        String pass = tfPassword.getRawText();
-
+        String user = tfUser.getText().trim(), pass = tfPass.getRawText();
         if (user.isEmpty() || pass.isEmpty()) {
-            showError("ENTER YOUR HERO NAME AND PASSWORD.");
+            showError("ENTER HERO NAME AND PASSWORD.");
             return;
         }
-
-        UserStore store = manager.getUserStore();
-        if (store.authenticate(user, pass)) {
+        if (manager.getUserStore().authenticate(user, pass)) {
             hideError();
+
+            manager.loginUser(user.toUpperCase());
+
             manager.showWelcome(user.toUpperCase());
         } else {
             showError("INVALID CREDENTIALS. TRY AGAIN.");
         }
     }
 
-    private void showError(String msg) {
-        lblError.setText(msg);
+    private void showError(String m) {
+        lblError.setText(m);
         lblError.setVisible(true);
         lblError.setManaged(true);
     }
@@ -160,20 +128,19 @@ public class LoginScreen extends BaseScreen {
         lblError.setManaged(false);
     }
 
-    /** Called by ScreenManager before showing this screen. */
     public void reset() {
-        if (tfUsername != null) tfUsername.clear();
-        if (tfPassword != null) tfPassword.clear();
+        if (tfUser != null)
+            tfUser.clear();
+        if (tfPass != null)
+            tfPass.clear();
         hideError();
     }
 
-    // ---------- Helpers ----------
-
-    private VBox fieldGroup(String labelText) {
-        VBox group = new VBox(6);
-        Label lbl = new Label(labelText);
-        lbl.getStyleClass().add("field-label");
-        group.getChildren().add(lbl);
-        return group;
+    private VBox fieldGroup(String lbl) {
+        VBox g = new VBox(6);
+        Label l = new Label(lbl);
+        l.getStyleClass().add("field-label");
+        g.getChildren().add(l);
+        return g;
     }
 }

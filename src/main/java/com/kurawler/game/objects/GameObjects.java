@@ -356,5 +356,3 @@ public final class GameObjects {
         return (obj instanceof WeaponObject w) ? w.getAtk() : 0;
     }
 }
-/ /   r e g i s t r y   s p r i t e   i n t e g r a t i o n  
- 

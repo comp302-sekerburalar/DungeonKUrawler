@@ -598,5 +598,3 @@ public class WaveEngine {
         return purchasedIds.contains(id) || userStore.ownsItem(hero.getName(), id);
     }
 }
-/ /   r e w a r d   s y n c   u p d a t e  
- 

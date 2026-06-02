@@ -151,6 +151,7 @@ public class GridMap {
     public boolean isAdjacent(Vec2 origin, Vec2 target) {
         return Math.abs(origin.col() - target.col()) <= 1 &&
                Math.abs(origin.row() - target.row()) <= 1;
+
     }
 
     // -------------------------------------------------------------------------
@@ -192,6 +193,7 @@ public class GridMap {
      * @throws AssertionError if the representation invariant is violated.
      */
     public void repOk() {
+        
         assert cols > 0 : "RI Violated: cols must be positive";
         assert rows > 0 : "RI Violated: rows must be positive";
         assert baseTiles != null : "RI Violated: baseTiles array cannot be null";

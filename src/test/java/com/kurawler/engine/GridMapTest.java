@@ -72,6 +72,12 @@ public class GridMapTest {
  * 4. Tiles that are floor and have no blocking objects should return true.
  * 
  */
+
+
+
+/**
+ * Test that out-of-bounds positions are not passable.
+ */
 @Test
 public void testIsPassableOutOfBounds() {
     GridMap map = new GridMap(5, 5);
@@ -80,6 +86,9 @@ public void testIsPassableOutOfBounds() {
     assertFalse(map.isPassable(new Vec2(10, 10)));
 }
 
+/**
+ * Test that wall tiles are not passable.
+ */
 @Test
 public void testIsPassableWallTile() {
     GridMap map = new GridMap(5, 5);
@@ -90,6 +99,9 @@ public void testIsPassableWallTile() {
     assertFalse(map.isPassable(pos));
 }
 
+/**
+ * Test that tiles occupied by blocking objects are not passable.
+ */
 @Test
 public void testIsPassableBlockedByObject() {
     GridMap map = new GridMap(5, 5);
@@ -109,6 +121,10 @@ public void testIsPassableBlockedByObject() {
     assertFalse(map.isPassable(pos));
 }
 
+
+/**
+ * Test that empty floor tiles are passable.
+ */
 @Test
 public void testIsPassableReturnsTrueOnEmptyFloor() {
     GridMap map = new GridMap(5, 5);

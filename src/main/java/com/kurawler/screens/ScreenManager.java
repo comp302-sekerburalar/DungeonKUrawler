@@ -100,6 +100,11 @@ public class ScreenManager {
         set(new GameScreen(this, heroName, map));
     }
 
+    public void startTeamMatch(String heroName, GridMap map) {
+        this.currentHero = heroName;
+        set(new GameScreen(this, heroName, map, com.kurawler.engine.GameEngine.Mode.TEAM_MATCH));
+    }
+
     public void startWaveSurvival(String difficulty) {
         set(new WaveSurvivalGameScreen(this, difficulty));
     }

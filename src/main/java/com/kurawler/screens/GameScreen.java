@@ -1,12 +1,15 @@
 package com.kurawler.screens;
 
-import com.kurawler.engine.GameEngine;
-import com.kurawler.engine.GridMap;
-import com.kurawler.engine.TileType;
-import com.kurawler.engine.Vec2;
+import com.kurawler.engine.*;
 import com.kurawler.game.action.Action;
 import com.kurawler.game.entity.*;
-import com.kurawler.game.objects.GameObject;
+import com.kurawler.game.objects.*;
+import com.kurawler.util.SpriteRenderer;
+import com.kurawler.util.HeroAnimator;
+import com.kurawler.util.KnightAnimator;
+import com.kurawler.util.SorcererAnimator;
+import com.kurawler.util.GameRenderer;
+import com.kurawler.util.ImageCache;
 
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -14,6 +17,7 @@ import javafx.geometry.Pos;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
@@ -22,464 +26,427 @@ import javafx.scene.text.FontWeight;
 
 import java.util.List;
 
-/**
- * The main gameplay screen.
- *
- * Layout:
- *   ┌─────────────────────────────────────────────────┐
- *   │  STATS BAR (HP / Energy / Mana / STR / DEF)     │
- *   ├───────────────────────┬─────────────────────────┤
- *   │                       │  INVENTORY (2×4)         │
- *   │   MAP CANVAS          ├─────────────────────────┤
- *   │                       │  ACTION MENU             │
- *   │                       ├─────────────────────────┤
- *   │                       │  AI / MESSAGE LOG        │
- *   └───────────────────────┴─────────────────────────┘
- */
 public class GameScreen extends BaseScreen {
 
-    // Rendering constants
-    private static final int TILE_PX  = 36;   // pixels per grid cell
+    private static final int TILE   = 36;   // rendered tile size in pixels
+    private static final int MAP_W  = 20;
+    private static final int MAP_H  = 15;
 
     private final GameEngine engine;
     private final String     heroName;
 
-    // UI components refreshed on state changes
-    private Canvas      mapCanvas;
-    private Label       lblHP, lblEnergy, lblMana, lblStr, lblDef;
-    private VBox        inventoryGrid;
-    private VBox        actionPanel;
-    private TextArea    messageLog;
-    private Label       lblAiStatus;
+    // ── UI components ──
+    private Canvas   mapCanvas;
+    private Label    lblHP, lblEnergy, lblMana, lblStr, lblDef;
+    private ProgressBar barHP, barEnergy, barMana;
+    private VBox     inventoryGrid;
+    private VBox     actionPanel;
+    private TextArea messageLog;
+    private Label    lblAiStatus;
+    private Label    lblTargetRelic;
+    private Label    lblWave;
 
-    // Currently selected map object for action menu
-    private GameObject  selectedObject;
+    private GameObject selectedObject;
+    private Enemy      selectedEnemy;
 
+    // ── Hero walk animation ──
+    private final HeroAnimator   heroAnimator  = new HeroAnimator();
+    // ── Knight animation (one per screen, reused for all knights) ──
+    private final KnightAnimator   knightAnimator   = new KnightAnimator();
+    private final SorcererAnimator sorcererAnimator = new SorcererAnimator();
+
+    // ── floor tile image (walls sheet row 0 col 0 = floor) ──
+    private static final int FLOOR_SC = 0, FLOOR_SR = 0;
+    private static final int WALL_SC  = 0, WALL_SR  = 0; // first wall tile
+
+    // ── character sprites (characters_x2.png rows) ──
+    // Row 0: wizards/sorcerers, Row 1: knights, Row 2: heroes, Row 3: mages
+    private static final int HERO_SC = 0, HERO_SR = 2;
+    private static final int KNIGHT_SC = 0, KNIGHT_SR = 1;
+    private static final int SORCERER_SC = 0, SORCERER_SR = 0;
+
+    /** Play with a randomly generated map. */
     public GameScreen(ScreenManager manager, String heroName) {
-        // Deferred build: engine must be assigned BEFORE buildUI() runs,
-        // because buildUI() -> buildRightPanel() -> rebuildInventoryGrid() -> engine.getHero()
+        this(manager, heroName, null);
+    }
+
+    /** Play with a pre-designed map (may be null for random). */
+    public GameScreen(ScreenManager manager, String heroName,
+                      com.kurawler.engine.GridMap existingMap) {
         super(manager, true);
         this.heroName = heroName;
-        this.engine   = new GameEngine();   // assigned BEFORE initView()
-
-        initView();      // now safe: all fields are ready
+        this.engine   = new GameEngine(heroName, existingMap);
+        initView();
         wireEngine();
         engine.start();
-        refresh();
+        Platform.runLater(this::refreshAll);
     }
 
     // =========================================================================
     //  UI construction
     // =========================================================================
-
     @Override
     protected Pane buildUI() {
         BorderPane root = new BorderPane();
         root.getStyleClass().add("dungeon-bg");
-        root.setPrefSize(800, 600);
+        root.setPrefSize(W(), H());
 
-        // ---- Top stats bar ----
-        root.setTop(buildStatsBar());
+        // Top HUD
+        root.setTop(buildHUD());
 
-        // ---- Map canvas (centre) ----
-        mapCanvas = new Canvas(TILE_PX * 20, TILE_PX * 15);
-        StackPane canvasWrap = new StackPane(mapCanvas);
-        canvasWrap.setStyle("-fx-background-color: #110808;");
-        // Scroll if map is larger than window
-        ScrollPane scroll = new ScrollPane(canvasWrap);
-        scroll.setFitToWidth(false);
-        scroll.setFitToHeight(false);
-        scroll.setStyle("-fx-background-color: #110808; -fx-border-color: transparent;");
-        scroll.setPrefSize(540, 520);
+        // Map canvas
+        mapCanvas = new Canvas(TILE * MAP_W, TILE * MAP_H);
+        ScrollPane scroll = new ScrollPane(mapCanvas);
+        scroll.setFitToWidth(false); scroll.setFitToHeight(false);
+        scroll.setStyle("-fx-background-color:#110808; -fx-border-color:transparent;");
+        scroll.setPrefSize(550, 535);
         root.setCenter(scroll);
 
-        // ---- Right panel ----
-        VBox rightPanel = buildRightPanel();
-        rightPanel.setPrefWidth(245);
-        root.setRight(rightPanel);
+        // Right sidebar
+        root.setRight(buildSidebar());
 
-        // ---- Canvas click → object selection ----
+        // Input
         mapCanvas.setOnMouseClicked(e -> handleMapClick(e.getX(), e.getY()));
-
-        // ---- Keyboard movement ----
-        root.setOnKeyPressed(ev -> handleKey(ev.getCode()));
+        root.setOnKeyPressed(e -> handleKey(e.getCode()));
         root.setFocusTraversable(true);
-
         return root;
     }
 
-    // ---------- Stats bar ----------
-
-    private HBox buildStatsBar() {
-        HBox bar = new HBox(18);
-        bar.setPadding(new Insets(8, 14, 8, 14));
+    // ── HUD (top bar) ──
+    private HBox buildHUD() {
+        HBox bar = new HBox(12);
+        bar.setPadding(new Insets(6, 12, 6, 12));
         bar.setAlignment(Pos.CENTER_LEFT);
-        bar.setStyle("-fx-background-color: #1e0e0e; -fx-border-color: #6b3a2a; -fx-border-width: 0 0 2 0;");
+        bar.setStyle("-fx-background-color:#1e0e0e; -fx-border-color:#6b3a2a; -fx-border-width:0 0 2 0;");
 
-        Label title = statLabel("♦ " + heroName, "#c9a227");
+        // Hero sprite in HUD
+        Canvas heroIcon = new Canvas(32, 32);
+        drawCharacterIcon(heroIcon.getGraphicsContext2D(), HERO_SC, HERO_SR);
 
-        lblHP     = statLabel("HP: --",     "#e74c3c");
-        lblEnergy = statLabel("EN: --",     "#2ecc71");
-        lblMana   = statLabel("MANA: --",   "#3498db");
-        lblStr    = statLabel("STR: --",    "#e8d5b0");
-        lblDef    = statLabel("DEF: --",    "#f39c12");
+        Label heroLbl = makeLabel("♦ " + heroName, "#c9a227", 11, true);
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
+        // Target relic display
+        lblTargetRelic = makeLabel("FIND: " + engine.getTargetRelicName(), "#7ee8fa", 10, true);
+
+        VBox statsLeft = new VBox(2);
+        statsLeft.setAlignment(Pos.CENTER_LEFT);
+
+        HBox hpRow = statRow("♥ HP", "#e74c3c");
+        barHP    = statBar("#e74c3c"); lblHP   = statValueLabel();
+        hpRow.getChildren().addAll(barHP, lblHP);
+
+        HBox enRow = statRow("⚡ EN", "#2ecc71");
+        barEnergy = statBar("#2ecc71"); lblEnergy = statValueLabel();
+        enRow.getChildren().addAll(barEnergy, lblEnergy);
+
+        HBox manaRow = statRow("✦ MP", "#3498db");
+        barMana  = statBar("#3498db"); lblMana  = statValueLabel();
+        manaRow.getChildren().addAll(barMana, lblMana);
+
+        statsLeft.getChildren().addAll(hpRow, enRow, manaRow);
+
+        lblStr = makeLabel("STR:--", "#f39c12", 10, false);
+        lblDef = makeLabel("DEF:--", "#9b59b6", 10, false);
+        VBox statsRight = new VBox(4, lblStr, lblDef);
+        statsRight.setAlignment(Pos.CENTER_LEFT);
+
+        Region spacer = new Region(); HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button btnMenu = new Button("MENU");
         btnMenu.getStyleClass().add("dungeon-btn");
-        btnMenu.setOnAction(e -> {
-            engine.pause();
-            manager.showMainMenu();
-        });
+        btnMenu.setOnAction(e -> { engine.pause(); showInGameMenu(); });
 
-        bar.getChildren().addAll(title, lblHP, lblEnergy, lblMana, lblStr, lblDef, spacer, btnMenu);
+        bar.getChildren().addAll(heroIcon, heroLbl, lblTargetRelic, statsLeft, statsRight, spacer, btnMenu);
         return bar;
     }
 
-    private Label statLabel(String text, String color) {
-        Label l = new Label(text);
-        l.setFont(Font.font("Courier New", FontWeight.BOLD, 11));
-        l.setTextFill(Color.web(color));
-        return l;
+    private void drawCharacterIcon(GraphicsContext gc, int sc, int sr) {
+        SpriteRenderer.drawTile(gc, "characters_x2", sc, sr, 0, 0, 32, 32);
     }
 
-    // ---------- Right panel ----------
-
-    private VBox buildRightPanel() {
+    // ── Sidebar ──
+    private VBox buildSidebar() {
         VBox panel = new VBox(0);
-        panel.setStyle("-fx-background-color: #1e0e0e; -fx-border-color: #6b3a2a; -fx-border-width: 0 0 0 2;");
+        panel.setPrefWidth(250);
+        panel.setStyle("-fx-background-color:#1e0e0e; -fx-border-color:#6b3a2a; -fx-border-width:0 0 0 2;");
 
-        // Inventory section
-        Label invTitle = sectionHeader("INVENTORY  (2×4)");
+        // Inventory
+        panel.getChildren().add(sectionHeader("INVENTORY (2×4)"));
         inventoryGrid = new VBox(3);
-        inventoryGrid.setPadding(new Insets(6, 8, 6, 8));
+        inventoryGrid.setPadding(new Insets(5, 8, 5, 8));
         rebuildInventoryGrid();
+        panel.getChildren().add(inventoryGrid);
 
-        Separator sep1 = new Separator();
-        sep1.setStyle("-fx-background-color: #3d2a2a;");
-
-        // Action menu section
-        Label actTitle = sectionHeader("ACTIONS");
+        panel.getChildren().add(divider());
+        panel.getChildren().add(sectionHeader("ACTIONS"));
         actionPanel = new VBox(4);
-        actionPanel.setPadding(new Insets(6, 8, 6, 8));
-        Label noSel = new Label("Click an adjacent object");
-        noSel.setFont(Font.font("Courier New", 10));
-        noSel.setTextFill(Color.web("#8a7060"));
-        noSel.setWrapText(true);
+        actionPanel.setPadding(new Insets(5, 8, 5, 8));
+        Label noSel = grayLabel("Click an adjacent object");
         actionPanel.getChildren().add(noSel);
+        panel.getChildren().add(actionPanel);
 
-        Separator sep2 = new Separator();
-        sep2.setStyle("-fx-background-color: #3d2a2a;");
-
-        // AI log section
-        Label aiTitle = sectionHeader("AI STATUS");
-        lblAiStatus = new Label("Waiting for enemies...");
+        panel.getChildren().add(divider());
+        panel.getChildren().add(sectionHeader("ENEMY AI"));
+        lblAiStatus = new Label("Waiting...");
         lblAiStatus.setFont(Font.font("Courier New", 9));
         lblAiStatus.setTextFill(Color.web("#8a7060"));
         lblAiStatus.setWrapText(true);
-        lblAiStatus.setPadding(new Insets(4, 8, 4, 8));
+        lblAiStatus.setPadding(new Insets(3,8,3,8));
+        panel.getChildren().add(lblAiStatus);
 
-        Separator sep3 = new Separator();
-        sep3.setStyle("-fx-background-color: #3d2a2a;");
-
-        // Message log
-        Label msgTitle = sectionHeader("LOG");
+        panel.getChildren().add(divider());
+        panel.getChildren().add(sectionHeader("LOG"));
         messageLog = new TextArea();
-        messageLog.setEditable(false);
-        messageLog.setWrapText(true);
-        messageLog.setPrefRowCount(5);
+        messageLog.setEditable(false); messageLog.setWrapText(true);
+        messageLog.setPrefRowCount(6);
         messageLog.setStyle(
-            "-fx-control-inner-background: #110808;" +
-            "-fx-text-fill: #8a7060;" +
-            "-fx-font-family: 'Courier New';" +
-            "-fx-font-size: 9px;" +
-            "-fx-border-color: transparent;"
-        );
+            "-fx-control-inner-background:#110808; -fx-text-fill:#8a7060;" +
+            "-fx-font-family:'Courier New'; -fx-font-size:9px; -fx-border-color:transparent;");
         VBox.setVgrow(messageLog, Priority.ALWAYS);
+        panel.getChildren().add(messageLog);
 
-        panel.getChildren().addAll(
-            invTitle, inventoryGrid, sep1,
-            actTitle, actionPanel,   sep2,
-            aiTitle,  lblAiStatus,   sep3,
-            msgTitle, messageLog
-        );
         return panel;
-    }
-
-    private Label sectionHeader(String text) {
-        Label l = new Label("  " + text);
-        l.setMaxWidth(Double.MAX_VALUE);
-        l.setPadding(new Insets(5, 0, 4, 0));
-        l.setFont(Font.font("Courier New", FontWeight.BOLD, 9));
-        l.setTextFill(Color.web("#c9a227"));
-        l.setStyle("-fx-background-color: #2a1a1a; -fx-border-color: #6b3a2a; -fx-border-width: 1 0 1 0;");
-        return l;
     }
 
     // =========================================================================
     //  Engine wiring
     // =========================================================================
-
     private void wireEngine() {
-        engine.setOnMapChanged(   () -> Platform.runLater(this::drawMap));
-        engine.setOnStatsChanged( () -> Platform.runLater(this::updateStats));
-        engine.setOnMessage(  msg -> Platform.runLater(() -> appendLog(msg)));
-        engine.setOnAiLog(    log -> Platform.runLater(() -> {
+        engine.setOnMapChanged(       () -> Platform.runLater(this::drawMap));
+        engine.setOnStatsChanged(     () -> Platform.runLater(this::updateStats));
+        engine.setOnInventoryChanged( () -> Platform.runLater(this::rebuildInventoryGrid));
+        engine.setOnMessage(     msg -> Platform.runLater(() -> appendLog(msg)));
+        engine.setOnAiLog(       log -> Platform.runLater(() -> {
             lblAiStatus.setText(log);
-            lblAiStatus.setTextFill(
-                log.contains("CHASING") ? Color.web("#e74c3c") : Color.web("#8a7060")
-            );
+            boolean chasing = log.contains("CHASING");
+            lblAiStatus.setTextFill(chasing ? Color.web("#e74c3c") : Color.web("#8a7060"));
         }));
+        engine.setOnGameOver( () -> Platform.runLater(this::showGameOverScreen));
+        engine.setOnVictory(  () -> Platform.runLater(this::showVictoryScreen));
     }
 
-    private void refresh() {
-        Platform.runLater(() -> {
-            drawMap();
-            updateStats();
-            rebuildInventoryGrid();
-        });
-    }
+    private void refreshAll() { drawMap(); updateStats(); rebuildInventoryGrid(); }
 
     // =========================================================================
     //  Map rendering
     // =========================================================================
-
     private void drawMap() {
         GridMap grid = engine.getMap();
         GraphicsContext gc = mapCanvas.getGraphicsContext2D();
 
+        // Background
         gc.setFill(Color.web("#110808"));
         gc.fillRect(0, 0, mapCanvas.getWidth(), mapCanvas.getHeight());
 
-        // ---- Base tiles ----
+        // Tiles — use GameRenderer which maps to actual image files
         for (int c = 0; c < grid.getCols(); c++) {
             for (int r = 0; r < grid.getRows(); r++) {
                 TileType t = grid.getTile(new Vec2(c, r));
-                Color fill = switch (t) {
-                    case WALL  -> Color.web("#3d2a2a");
-                    case FLOOR -> Color.web("#1e1010");
-                    default    -> Color.web("#1e1010");
-                };
-                gc.setFill(fill);
-                gc.fillRect(c * TILE_PX, r * TILE_PX, TILE_PX - 1, TILE_PX - 1);
-
-                // Wall border highlight
-                if (t == TileType.WALL) {
-                    gc.setStroke(Color.web("#6b3a2a"));
-                    gc.setLineWidth(1);
-                    gc.strokeRect(c * TILE_PX, r * TILE_PX, TILE_PX - 1, TILE_PX - 1);
-                }
+                double px = c * TILE, py = r * TILE;
+                GameRenderer.drawTile(gc, t, c, r, px, py, TILE);
             }
         }
 
-        // ---- Highlight 3×3 area around hero ----
+        // 3×3 interaction highlight around hero
         Vec2 heroPos = engine.getHero().getPos();
+        gc.setFill(Color.web("#c9a22712"));
         for (int dc = -1; dc <= 1; dc++) {
             for (int dr = -1; dr <= 1; dr++) {
                 Vec2 cell = heroPos.add(dc, dr);
-                if (cell.inBounds(grid.getCols(), grid.getRows())) {
-                    gc.setFill(Color.web("#c9a22710"));
-                    gc.fillRect(cell.col() * TILE_PX, cell.row() * TILE_PX, TILE_PX - 1, TILE_PX - 1);
-                }
+                if (cell.inBounds(grid.getCols(), grid.getRows()))
+                    gc.fillRect(cell.col()*TILE, cell.row()*TILE, TILE-1, TILE-1);
             }
         }
 
-        // ---- Game objects ----
-        for (var list : engine.getMap().allObjects()) {
-            for (GameObject obj : list) {
-                drawObject(gc, obj);
-            }
+        // Game objects
+        for (var list : grid.allObjects()) {
+            for (GameObject obj : list) drawObject(gc, obj);
         }
 
-        // ---- Enemies ----
-        for (var enemy : engine.getEnemies()) {
-            drawEnemy(gc, enemy);
+        // Projectiles
+        for (Projectile p : engine.getProjectiles()) {
+            if (!p.isActive()) continue;
+            GameRenderer.drawProjectile(gc, p.getPos().col()*TILE, p.getPos().row()*TILE, TILE);
         }
 
-        // ---- Hero ----
+        // Enemies
+        for (Enemy e : engine.getEnemies()) drawEnemy(gc, e);
+
+        // Hero
         drawHero(gc, heroPos);
     }
 
     private void drawObject(GraphicsContext gc, GameObject obj) {
-        int px = obj.getPos().col() * TILE_PX;
-        int py = obj.getPos().row() * TILE_PX;
-
-        Color bg = switch (obj.renderTag()) {
-            case "WALL"   -> Color.web("#3d2a2a");
-            case "CRATE"  -> Color.web("#8B4513");
-            case "KEY"    -> Color.web("#c9a227");
-            case "GEM"    -> Color.web("#3498db");
-            case "POTION" -> Color.web("#c0392b");
-            default       -> Color.web("#666666");
-        };
-
-        if (obj.blocksMovement()) {
-            // Solid fill for static objects
-            gc.setFill(bg);
-            gc.fillRect(px + 2, py + 2, TILE_PX - 5, TILE_PX - 5);
-            gc.setStroke(bg.brighter());
-            gc.setLineWidth(1.5);
-            gc.strokeRect(px + 2, py + 2, TILE_PX - 5, TILE_PX - 5);
+        double px = obj.getPos().col() * TILE;
+        double py = obj.getPos().row() * TILE;
+        if ("SEARCH_WALL".equals(obj.renderTag())) {
+            GameRenderer.drawSearchableWall(gc, px, py, TILE);
+        } else if ("WEAPON".equals(obj.renderTag())) {
+            GameRenderer.drawWeapon(gc, px, py, TILE);
+        } else if ("ARMOR".equals(obj.renderTag())) {
+            GameRenderer.drawArmor(gc, px, py, TILE);
         } else {
-            // Circular for items (passable)
-            gc.setFill(bg);
-            double r = TILE_PX / 3.0;
-            gc.fillOval(px + TILE_PX / 2.0 - r, py + TILE_PX / 2.0 - r, r * 2, r * 2);
+            GameRenderer.drawObject(gc, obj, px, py, TILE);
         }
-
-        // Label
-        gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("Courier New", FontWeight.BOLD, 8));
-        String label = switch (obj.renderTag()) {
-            case "CRATE"  -> "CR";
-            case "KEY"    -> "K";
-            case "GEM"    -> "G";
-            case "POTION" -> "P";
-            default       -> obj.getName().substring(0, Math.min(2, obj.getName().length())).toUpperCase();
-        };
-        gc.fillText(label, px + 4, py + TILE_PX - 6);
-
-        // Highlight if selected
+        // Selection highlight
         if (obj == selectedObject) {
             gc.setStroke(Color.web("#c9a227"));
             gc.setLineWidth(2);
-            gc.strokeRect(px + 1, py + 1, TILE_PX - 3, TILE_PX - 3);
+            gc.strokeRect(px+1, py+1, TILE-3, TILE-3);
+        }
+    }
+    private void drawHero(GraphicsContext gc, Vec2 pos) {
+        double px = pos.col()*TILE, py = pos.row()*TILE;
+        heroAnimator.draw(gc, px, py, TILE, TILE);
+        // Weapon equipped indicator
+        if (engine.getHero().hasWeaponEquipped()) {
+            gc.setFill(Color.web("#c9a227", 0.8));
+            gc.fillRect(px+TILE-8, py, 8, 8);
         }
     }
 
-    private void drawHero(GraphicsContext gc, Vec2 pos) {
-        int px = pos.col() * TILE_PX;
-        int py = pos.row() * TILE_PX;
-        gc.setFill(Color.web("#c9a227"));
-        double[] xp = {px + TILE_PX/2.0, px + 4, px + TILE_PX - 4};
-        double[] yp = {py + 4, py + TILE_PX - 4, py + TILE_PX - 4};
-        gc.fillPolygon(xp, yp, 3);
-        gc.setStroke(Color.web("#fff8dc"));
-        gc.setLineWidth(1.5);
-        gc.strokePolygon(xp, yp, 3);
-    }
-
     private void drawEnemy(GraphicsContext gc, Enemy enemy) {
-        int px = enemy.getPos().col() * TILE_PX;
-        int py = enemy.getPos().row() * TILE_PX;
-        Color col = enemy.getState() == EnemyState.CHASING ?
-            Color.web("#e74c3c") : Color.web("#8e44ad");
-        gc.setFill(col);
-        gc.fillRect(px + 4, py + 4, TILE_PX - 9, TILE_PX - 9);
-        gc.setStroke(col.brighter());
-        gc.setLineWidth(1.5);
-        gc.strokeRect(px + 4, py + 4, TILE_PX - 9, TILE_PX - 9);
-        gc.setFill(Color.WHITE);
-        gc.setFont(Font.font("Courier New", FontWeight.BOLD, 7));
-        gc.fillText(enemy.getType() == Enemy.Type.KNIGHT ? "KN" : "SC", px + 6, py + TILE_PX - 8);
+        double px = enemy.getPos().col() * TILE;
+        double py = enemy.getPos().row() * TILE;
+        // Step knight animation when enemy is chasing (visual feedback)
+        if (enemy.getType() == Enemy.Type.KNIGHT && enemy.getState() == EnemyState.CHASING) {
+            knightAnimator.step();
+        } else if (enemy.getType() == Enemy.Type.SORCERER) {
+            sorcererAnimator.step();
+        }
+        GameRenderer.drawEnemy(gc, enemy, px, py, TILE, knightAnimator, sorcererAnimator, enemy == selectedEnemy);
     }
 
     // =========================================================================
-    //  Stats update
+    //  Stats bar update
     // =========================================================================
-
     private void updateStats() {
         Hero h = engine.getHero();
-        lblHP.setText("HP: "     + h.getStat(StatType.HP)     + "/" + h.getStatMax(StatType.HP));
-        lblEnergy.setText("EN: " + h.getStat(StatType.ENERGY) + "/" + h.getStatMax(StatType.ENERGY));
-        lblMana.setText("MANA: " + h.getStat(StatType.MANA)   + "/" + h.getStatMax(StatType.MANA));
-        lblStr.setText("STR: "   + h.getStat(StatType.STR));
-        lblDef.setText("DEF: "   + h.getStat(StatType.DEF));
+        int hp  = h.getStat(StatType.HP),    maxHp  = h.getStatMax(StatType.HP);
+        int en  = h.getStat(StatType.ENERGY), maxEn = h.getStatMax(StatType.ENERGY);
+        int mp  = h.getStat(StatType.MANA),  maxMp  = h.getStatMax(StatType.MANA);
+
+        lblHP.setText(hp + "/" + maxHp);
+        lblEnergy.setText(en + "/" + maxEn);
+        lblMana.setText(mp + "/" + maxMp);
+        lblStr.setText("STR:" + h.getStat(StatType.STR));
+        lblDef.setText("DEF:" + h.getStat(StatType.DEF));
+
+        barHP.setProgress((double)hp / maxHp);
+        barEnergy.setProgress((double)en / maxEn);
+        barMana.setProgress((double)mp / maxMp);
     }
 
     // =========================================================================
-    //  Inventory panel
+    //  Inventory panel — uses sprite icons
     // =========================================================================
-
     private void rebuildInventoryGrid() {
         if (inventoryGrid == null) return;
         inventoryGrid.getChildren().clear();
-
         Inventory inv = engine.getHero().getInventory();
-        // 2 columns × 4 rows
+
         for (int row = 0; row < Inventory.ROWS; row++) {
             HBox rowBox = new HBox(3);
             for (int col = 0; col < Inventory.COLS; col++) {
-                int index = row * Inventory.COLS + col;
-                GameObject item = inv.get(index);
-                Button slot = buildInventorySlot(item);
-                rowBox.getChildren().add(slot);
+                int idx = row * Inventory.COLS + col;
+                GameObject item = inv.get(idx);
+                rowBox.getChildren().add(buildInventorySlot(item));
             }
             inventoryGrid.getChildren().add(rowBox);
         }
     }
 
-    private Button buildInventorySlot(GameObject item) {
-        Button btn = new Button(item == null ? "" : item.getName().substring(0, Math.min(6, item.getName().length())));
-        btn.setPrefSize(106, 28);
-        btn.setFont(Font.font("Courier New", FontWeight.BOLD, 8));
-        if (item == null) {
-            btn.setStyle(
-                "-fx-background-color: #110808; -fx-border-color: #3d2a2a; -fx-border-width: 1;" +
-                "-fx-text-fill: #3d2a2a; -fx-background-radius: 0; -fx-border-radius: 0;"
-            );
-        } else {
-            btn.setStyle(
-                "-fx-background-color: #3d2a2a; -fx-border-color: #c9a227; -fx-border-width: 1;" +
-                "-fx-text-fill: #e8d5b0; -fx-background-radius: 0; -fx-border-radius: 0; -fx-cursor: hand;"
-            );
+    private Pane buildInventorySlot(GameObject item) {
+        StackPane slot = new StackPane();
+        slot.setPrefSize(112, 30);
+        slot.setStyle("-fx-background-color:" +
+            (item == null ? "#110808" : "#2a1a1a") +
+            "; -fx-border-color:" +
+            (item == null ? "#2a1a1a" : "#6b3a2a") +
+            "; -fx-border-width:1; -fx-cursor:" +
+            (item == null ? "default" : "hand") + ";");
+
+        if (item != null) {
+            // Sprite icon
+            Canvas icon = new Canvas(24, 24);
+            GraphicsContext gc = icon.getGraphicsContext2D();
+            String sheet = item.getSpriteSheet();
+            if (sheet != null && !sheet.isEmpty()) {
+                SpriteRenderer.drawTile(gc, sheet, item.getSpriteCol(), item.getSpriteRow(), 0, 0, 24, 24);
+            }
+            // Name label
+            Label name = new Label(item.getName().length() > 8
+                ? item.getName().substring(0,7)+"…" : item.getName());
+            name.setFont(Font.font("Courier New", 8));
+            name.setTextFill(Color.web("#e8d5b0"));
+
+            // Equipped indicator
+            boolean equipped = item == engine.getHero().getEquippedWeapon();
+            if (equipped) slot.setStyle(slot.getStyle() + "-fx-border-color:#c9a227; -fx-border-width:2;");
+
+            HBox content = new HBox(4, icon, name);
+            content.setAlignment(Pos.CENTER_LEFT);
+            content.setPadding(new Insets(0,3,0,3));
+            slot.getChildren().add(content);
+
             final GameObject captured = item;
-            btn.setOnAction(e -> showInventoryActions(captured));
+            slot.setOnMouseClicked(e -> showInventoryActions(captured));
         }
-        return btn;
+        return slot;
     }
 
     private void showInventoryActions(GameObject item) {
         selectedObject = item;
         actionPanel.getChildren().clear();
-
-        Label header = new Label(item.getName());
-        header.setFont(Font.font("Courier New", FontWeight.BOLD, 10));
-        header.setTextFill(Color.web("#c9a227"));
+        Label header = makeLabel(item.getName(), "#c9a227", 10, true);
         actionPanel.getChildren().add(header);
 
         for (Action action : item.getActions()) {
-            Button btn = actionButton(action.getLabel(), () -> {
+            Button btn = actionBtn(action.getLabel(), () -> {
                 engine.executeAction(action, item);
-                rebuildInventoryGrid();
                 actionPanel.getChildren().clear();
                 selectedObject = null;
+                drawMap();
             });
             actionPanel.getChildren().add(btn);
         }
-
-        // DISCARD action (spec §2.4.2)
-        Button discard = actionButton("Discard " + item.getName(), () -> {
+        // DISCARD (spec §2.4.2)
+        Button discard = actionBtn("Discard " + item.getName(), () -> {
             engine.getHero().getInventory().remove(item);
+            if (engine.getHero().getEquippedWeapon() == item) engine.getHero().unequipWeapon();
             engine.postMessage("Discarded: " + item.getName());
-            engine.notifyStatsChanged();
-            rebuildInventoryGrid();
+            engine.notifyInventoryChanged();
             actionPanel.getChildren().clear();
             selectedObject = null;
         });
-        discard.setStyle(discard.getStyle() + "-fx-text-fill: #e74c3c;");
+        discard.setStyle(discard.getStyle() + "-fx-text-fill:#e74c3c;");
         actionPanel.getChildren().add(discard);
     }
 
     // =========================================================================
-    //  Map click → action menu
+    //  Map click — objects and enemies
     // =========================================================================
-
     private void handleMapClick(double mouseX, double mouseY) {
-        int col = (int)(mouseX / TILE_PX);
-        int row = (int)(mouseY / TILE_PX);
+        int col = (int)(mouseX / TILE);
+        int row = (int)(mouseY / TILE);
         Vec2 clicked = new Vec2(col, row);
 
-        // Check for objects at the clicked cell
+        // Check if clicked on an enemy
+        for (Enemy e : engine.getEnemies()) {
+            if (e.getPos().equals(clicked)) {
+                selectedEnemy = e;
+                selectedObject = null;
+                showEnemyActions(e);
+                drawMap();
+                return;
+            }
+        }
+        selectedEnemy = null;
+
         List<GameObject> objs = engine.getMap().objectsAt(clicked);
         if (objs.isEmpty()) {
             actionPanel.getChildren().clear();
-            Label lbl = new Label("Nothing there.");
-            lbl.setFont(Font.font("Courier New", 10));
-            lbl.setTextFill(Color.web("#8a7060"));
-            actionPanel.getChildren().add(lbl);
+            actionPanel.getChildren().add(grayLabel("Nothing here."));
             selectedObject = null;
             drawMap();
             return;
@@ -487,27 +454,24 @@ public class GameScreen extends BaseScreen {
 
         GameObject obj = objs.get(0);
         selectedObject = obj;
+        showObjectActions(obj);
+        drawMap();
+    }
 
+    private void showObjectActions(GameObject obj) {
         List<Action> actions = engine.getActionsFor(obj);
         actionPanel.getChildren().clear();
-
-        Label header = new Label(obj.getName());
-        header.setFont(Font.font("Courier New", FontWeight.BOLD, 10));
-        header.setTextFill(Color.web("#c9a227"));
-        actionPanel.getChildren().add(header);
+        actionPanel.getChildren().add(makeLabel(obj.getName(), "#c9a227", 10, true));
 
         if (actions.isEmpty()) {
-            boolean adjacent = engine.getMap().isAdjacent(engine.getHero().getPos(), obj.getPos());
-            Label info = new Label(adjacent ? "No actions available." : "Too far away! Move closer.");
-            info.setFont(Font.font("Courier New", 9));
-            info.setTextFill(adjacent ? Color.web("#8a7060") : Color.web("#e74c3c"));
-            info.setWrapText(true);
+            boolean adj = engine.getMap().isAdjacent(engine.getHero().getPos(), obj.getPos());
+            Label info = grayLabel(adj ? "No actions." : "Too far away — move closer.");
+            if (!adj) info.setTextFill(Color.web("#e74c3c"));
             actionPanel.getChildren().add(info);
         } else {
             for (Action action : actions) {
-                Button btn = actionButton(action.getLabel(), () -> {
+                Button btn = actionBtn(action.getLabel(), () -> {
                     engine.executeAction(action, obj);
-                    rebuildInventoryGrid();
                     actionPanel.getChildren().clear();
                     selectedObject = null;
                     drawMap();
@@ -515,56 +479,165 @@ public class GameScreen extends BaseScreen {
                 actionPanel.getChildren().add(btn);
             }
         }
-        drawMap();
     }
 
-    private Button actionButton(String label, Runnable onClick) {
-        Button btn = new Button(label);
-        btn.setMaxWidth(Double.MAX_VALUE);
-        btn.setFont(Font.font("Courier New", FontWeight.BOLD, 9));
-        btn.setStyle(
-            "-fx-background-color: #3d2a2a; -fx-border-color: #6b3a2a; -fx-border-width: 1;" +
-            "-fx-text-fill: #e8d5b0; -fx-padding: 5 8 5 8; -fx-background-radius: 0;" +
-            "-fx-border-radius: 0; -fx-cursor: hand;"
-        );
-        btn.setOnMouseEntered(e -> btn.setStyle(
-            "-fx-background-color: #6b3a2a; -fx-border-color: #c9a227; -fx-border-width: 1;" +
-            "-fx-text-fill: #c9a227; -fx-padding: 5 8 5 8; -fx-background-radius: 0;" +
-            "-fx-border-radius: 0; -fx-cursor: hand;"
-        ));
-        btn.setOnMouseExited(e -> btn.setStyle(
-            "-fx-background-color: #3d2a2a; -fx-border-color: #6b3a2a; -fx-border-width: 1;" +
-            "-fx-text-fill: #e8d5b0; -fx-padding: 5 8 5 8; -fx-background-radius: 0;" +
-            "-fx-border-radius: 0; -fx-cursor: hand;"
-        ));
-        btn.setOnAction(e -> onClick.run());
-        return btn;
-    }
+    private void showEnemyActions(Enemy enemy) {
+        actionPanel.getChildren().clear();
+        actionPanel.getChildren().add(makeLabel(
+            enemy.getType() + " #" + enemy.getId(), "#e74c3c", 10, true));
+        actionPanel.getChildren().add(grayLabel("HP: " + enemy.getStat(StatType.HP)));
+        actionPanel.getChildren().add(grayLabel("State: " + enemy.getState()));
 
-    // =========================================================================
-    //  Keyboard input
-    // =========================================================================
-
-    private void handleKey(KeyCode code) {
-        boolean moved = switch (code) {
-            case UP,    W -> engine.moveHero( 0, -1);
-            case DOWN,  S -> engine.moveHero( 0,  1);
-            case LEFT,  A -> engine.moveHero(-1,  0);
-            case RIGHT, D -> engine.moveHero( 1,  0);
-            default       -> false;
-        };
-        if (moved) {
-            drawMap();
-            updateStats();
-            rebuildInventoryGrid();
+        if (engine.getHero().hasWeaponEquipped() &&
+            engine.getMap().isAdjacent(engine.getHero().getPos(), enemy.getPos())) {
+            Button btnAtk = actionBtn("Attack " + enemy.getType(), () -> {
+                engine.heroAttackEnemy(enemy);
+                selectedEnemy = null;
+                actionPanel.getChildren().clear();
+                drawMap();
+            });
+            btnAtk.setStyle(btnAtk.getStyle() + "-fx-border-color:#e74c3c;");
+            actionPanel.getChildren().add(btnAtk);
+        } else {
+            String msg = engine.getHero().hasWeaponEquipped()
+                ? "Move adjacent to attack."
+                : "Equip a weapon to attack.";
+            actionPanel.getChildren().add(grayLabel(msg));
         }
+    }
+
+    // =========================================================================
+    //  Keyboard
+    // =========================================================================
+    private void handleKey(KeyCode code) {
+        if (engine.isGameOver()) return;
+        switch (code) {
+            case UP,    W -> { if (engine.moveHero( 0, -1)) heroAnimator.step(); }
+            case DOWN,  S -> { if (engine.moveHero( 0,  1)) heroAnimator.step(); }
+            case LEFT,  A -> { if (engine.moveHero(-1,  0)) heroAnimator.step(); }
+            case RIGHT, D -> { if (engine.moveHero( 1,  0)) heroAnimator.step(); }
+            case ESCAPE   -> { engine.pause(); showInGameMenu(); }
+            default -> {}
+        }
+    }
+
+    // =========================================================================
+    //  In-game menu, game over, victory
+    // =========================================================================
+    private void showInGameMenu() {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Pause");
+        alert.setHeaderText("GAME PAUSED");
+        ButtonType resume = new ButtonType("Resume");
+        ButtonType mainMenu = new ButtonType("Main Menu");
+        alert.getButtonTypes().setAll(resume, mainMenu);
+        alert.showAndWait().ifPresent(btn -> {
+            if (btn == mainMenu) { engine.stop(); manager.showMainMenu(); }
+            else engine.resume();
+        });
+    }
+
+    private void showGameOverScreen() {
+        engine.stop();
+        Alert a = new Alert(Alert.AlertType.ERROR);
+        a.setTitle("Game Over");
+        a.setHeaderText("YOU HAVE FALLEN");
+        a.setContentText("The dungeon claims another victim.\nReturn to the main menu?");
+        ButtonType retry = new ButtonType("Try Again");
+        ButtonType menu  = new ButtonType("Main Menu");
+        a.getButtonTypes().setAll(retry, menu);
+        a.showAndWait().ifPresent(btn -> {
+            if (btn == retry) manager.startGame(heroName);
+            else              manager.showMainMenu();
+        });
+    }
+
+    private void showVictoryScreen() {
+        engine.stop();
+        Alert a = new Alert(Alert.AlertType.INFORMATION);
+        a.setTitle("Victory!");
+        a.setHeaderText("YOU FOUND THE " + engine.getTargetRelicName().toUpperCase() + "!");
+        a.setContentText("The dungeon yields its secret. You are victorious!");
+        ButtonType menu = new ButtonType("Main Menu");
+        a.getButtonTypes().setAll(menu);
+        a.showAndWait();
+        manager.showMainMenu();
     }
 
     // =========================================================================
     //  Message log
     // =========================================================================
-
     private void appendLog(String msg) {
         messageLog.appendText(msg + "\n");
+    }
+
+    // =========================================================================
+    //  UI helpers
+    // =========================================================================
+    private Label makeLabel(String text, String color, int size, boolean bold) {
+        Label l = new Label(text);
+        l.setFont(Font.font("Courier New", bold ? FontWeight.BOLD : FontWeight.NORMAL, size));
+        l.setTextFill(Color.web(color));
+        return l;
+    }
+
+    private Label grayLabel(String text) { return makeLabel(text, "#8a7060", 9, false); }
+
+    private Label statValueLabel() {
+        Label l = new Label("--/--");
+        l.setFont(Font.font("Courier New", 9));
+        l.setTextFill(Color.web("#e8d5b0"));
+        return l;
+    }
+
+    private HBox statRow(String label, String color) {
+        Label lbl = makeLabel(label, color, 9, true);
+        lbl.setMinWidth(42);
+        HBox row = new HBox(4, lbl);
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
+    }
+
+    private ProgressBar statBar(String color) {
+        ProgressBar bar = new ProgressBar(1.0);
+        bar.setPrefWidth(80);
+        bar.setPrefHeight(8);
+        bar.setStyle("-fx-accent: " + color + ";");
+        return bar;
+    }
+
+    private Label sectionHeader(String text) {
+        Label l = new Label("  " + text);
+        l.setMaxWidth(Double.MAX_VALUE);
+        l.setPadding(new Insets(4, 0, 3, 0));
+        l.setFont(Font.font("Courier New", FontWeight.BOLD, 9));
+        l.setTextFill(Color.web("#c9a227"));
+        l.setStyle("-fx-background-color:#2a1a1a; -fx-border-color:#6b3a2a; -fx-border-width:1 0 1 0;");
+        return l;
+    }
+
+    private Region divider() {
+        Region r = new Region();
+        r.setPrefHeight(1);
+        r.setMaxWidth(Double.MAX_VALUE);
+        r.setStyle("-fx-background-color:#3d2a2a;");
+        return r;
+    }
+
+    private Button actionBtn(String label, Runnable onClick) {
+        Button btn = new Button(label);
+        btn.setMaxWidth(Double.MAX_VALUE);
+        btn.setFont(Font.font("Courier New", FontWeight.BOLD, 9));
+        String base = "-fx-background-color:#3d2a2a; -fx-border-color:#6b3a2a; -fx-border-width:1;" +
+                      "-fx-text-fill:#e8d5b0; -fx-padding:4 6 4 6; -fx-background-radius:0;" +
+                      "-fx-border-radius:0; -fx-cursor:hand;";
+        String hover = "-fx-background-color:#6b3a2a; -fx-border-color:#c9a227; -fx-border-width:1;" +
+                       "-fx-text-fill:#c9a227; -fx-padding:4 6 4 6; -fx-background-radius:0;" +
+                       "-fx-border-radius:0; -fx-cursor:hand;";
+        btn.setStyle(base);
+        btn.setOnMouseEntered(e -> btn.setStyle(hover));
+        btn.setOnMouseExited(e  -> btn.setStyle(base));
+        btn.setOnAction(e -> onClick.run());
+        return btn;
     }
 }

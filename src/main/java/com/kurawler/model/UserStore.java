@@ -289,3 +289,6 @@ public class UserStore {
         }
     }
 }
+/ /   o w n e r s h i p   v a l i d a t i o n  
+ / /   p u r c h a s e   p e r s i s t e n c e  
+ 

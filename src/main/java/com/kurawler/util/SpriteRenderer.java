@@ -11,12 +11,12 @@ import java.util.Map;
 /**
  * Loads sprite sheets from resources and renders tiles onto a JavaFX Canvas.
  *
- * Tile size is 32px. All x2 sheets:
- * characters_x2.png 9×8
- * items_x2.png 6×4
- * weapons_x2.png 10×10
- * containers_x2.png 4×6
- * walls_and_statics_x2.png 30×8
+ * Tile size is 32px.  All x2 sheets:
+ *   characters_x2.png   9×8
+ *   items_x2.png        6×4
+ *   weapons_x2.png      10×10
+ *   containers_x2.png   4×6
+ *   walls_and_statics_x2.png  30×8
  */
 public final class SpriteRenderer {
 
@@ -24,8 +24,7 @@ public final class SpriteRenderer {
 
     private static final Map<String, Image> cache = new HashMap<>();
 
-    private SpriteRenderer() {
-    }
+    private SpriteRenderer() {}
 
     /**
      * Load (and cache) an image by filename (with extension).
@@ -35,10 +34,10 @@ public final class SpriteRenderer {
         return cache.computeIfAbsent(filename, name -> {
             // Try all common resource paths
             String[] paths = {
-                    "/images/" + name,
-                    "images/" + name,
-                    "/" + name,
-                    name
+                "/images/" + name,
+                "images/" + name,
+                "/" + name,
+                name
             };
             for (String p : paths) {
                 try {
@@ -50,8 +49,7 @@ public final class SpriteRenderer {
                             return img;
                         }
                     }
-                } catch (Exception ignored) {
-                }
+                } catch (Exception ignored) {}
                 try {
                     URL url = SpriteRenderer.class.getResource(p);
                     if (url != null) {
@@ -61,8 +59,7 @@ public final class SpriteRenderer {
                             return img;
                         }
                     }
-                } catch (Exception ignored) {
-                }
+                } catch (Exception ignored) {}
             }
             System.err.println("[SpriteRenderer] FAILED to load: " + name);
             return null;
@@ -77,9 +74,9 @@ public final class SpriteRenderer {
     // ── Sheet tile rendering ──────────────────────────────────────────────────
 
     public static void drawTile(GraphicsContext gc, String sheetName,
-            int srcCol, int srcRow,
-            double destX, double destY,
-            double destW, double destH) {
+                                int srcCol, int srcRow,
+                                double destX, double destY,
+                                double destW, double destH) {
         Image sheet = getSheet(sheetName);
         if (sheet == null) {
             // Draw a magenta placeholder so missing sprites are obvious
@@ -93,18 +90,17 @@ public final class SpriteRenderer {
     }
 
     public static void drawTile(GraphicsContext gc, String sheetName,
-            int srcCol, int srcRow,
-            double destX, double destY) {
+                                int srcCol, int srcRow,
+                                double destX, double destY) {
         drawTile(gc, sheetName, srcCol, srcRow, destX, destY, TILE_SIZE, TILE_SIZE);
     }
 
     // ── Full image rendering ──────────────────────────────────────────────────
 
     public static void drawImage(GraphicsContext gc, String name,
-            double x, double y, double w, double h) {
+                                 double x, double y, double w, double h) {
         Image img = loadImage(name);
-        if (img == null)
-            return;
+        if (img == null) return;
         gc.drawImage(img, x, y, w, h);
     }
 
@@ -113,11 +109,10 @@ public final class SpriteRenderer {
      * into dest rect (dx,dy,dw,dh).
      */
     public static void drawImageRegion(GraphicsContext gc, String name,
-            double sx, double sy, double sw, double sh,
-            double dx, double dy, double dw, double dh) {
+                                       double sx, double sy, double sw, double sh,
+                                       double dx, double dy, double dw, double dh) {
         Image img = loadImage(name);
-        if (img == null)
-            return;
+        if (img == null) return;
         gc.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
     }
 }

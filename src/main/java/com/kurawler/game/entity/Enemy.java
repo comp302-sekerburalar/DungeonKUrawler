@@ -3,201 +3,121 @@ package com.kurawler.game.entity;
 import com.kurawler.engine.GridMap;
 import com.kurawler.engine.Vec2;
 
-import java.util.*;
+import java.util.List;
+import java.util.Random;
 
 /**
- * Dungeon enemy — Knight or Sorcerer.
+ * A dungeon enemy (Knight or Sorcerer).
  *
- * Knight : melee, ROAM/CHASE by distance, attacks adjacent hero.
- * Sorcerer: no walk, teleports every 7s (50%), fires projectile every 5s.
+ * AI rules (spec §2.5.1):
+ *   distance > DETECTION_RADIUS  → ROAMING  (random walk)
+ *   distance ≤ DETECTION_RADIUS  → CHASING  (move toward hero)
  */
 public class Enemy {
 
-    public enum Type {
-        KNIGHT, SORCERER
-    }
+    public enum Type { KNIGHT, SORCERER }
 
+    /** Euclidean distance threshold (spec: 5, rounded up). */
     public static final double DETECTION_RADIUS = 5.0;
 
     private static final Random RNG = new Random();
 
-    private final String id;
-    private final Type type;
-    private Vec2 pos;
+    private final String id;       // unique ID for rendering
+    private final Type   type;
+    private Vec2         pos;
     private CharacterStats stats;
-    private EnemyState state;
-
-    // Sorcerer timers (ticks at 1s each)
-    private int teleportCooldown = 7;
-    private int projectileCooldown = 5;
-
-    // Pending projectile launch — read by engine each tick
-    private Vec2 pendingProjectileTarget = null;
+    private EnemyState   state;
 
     public Enemy(String id, Type type, Vec2 spawnPos) {
-        this.id = id;
-        this.type = type;
-        this.pos = spawnPos;
+        this.id    = id;
+        this.type  = type;
+        this.pos   = spawnPos;
         this.state = EnemyState.ROAMING;
 
+        // spec §2.5.1 / §2.5.2 starting stats
         if (type == Type.KNIGHT) {
-            // HP=20, DEF reduces incoming by 1
-            stats = new CharacterStats(20, 0, 8 + RNG.nextInt(4), 1, 100);
+            stats = new CharacterStats(20, 0, 10, 1, 100);
         } else {
-            // HP=10, no armor, may have ring
-            boolean hasRing = RNG.nextBoolean();
-            stats = new CharacterStats(10, 60, 5, hasRing ? 2 : 0, 100);
+            stats = new CharacterStats(10, 60, 5, 0, 100);
         }
     }
 
-    /** Scaled constructor used by WaveEngine — overrides HP and STR. */
-    public Enemy(String id, Type type, Vec2 spawnPos, int scaledHp, int scaledStr) {
-        this.id = id;
-        this.type = type;
-        this.pos = spawnPos;
-        this.state = EnemyState.ROAMING;
-        int def = type == Type.KNIGHT ? 1 + scaledStr / 8 : (RNG.nextBoolean() ? 2 : 0);
-        stats = new CharacterStats(Math.max(1, scaledHp), type == Type.SORCERER ? 60 : 0,
-                Math.max(4, scaledStr), def, 100);
-    }
+    // ---------- AI tick ----------
 
     /**
-     * Called every AI tick (1 second). Returns a status string.
-     * Side-effects: moves enemy, may set pendingProjectileTarget.
+     * Called once per game tick. Updates AI state and moves the enemy one cell.
+     * Logs detection transitions to stdout (spec requirement).
+     *
+     * @return a log message describing what happened ("Roaming" or "Chasing …")
      */
     public String tick(Vec2 heroPos, GridMap map) {
         double dist = pos.distanceTo(heroPos);
 
         EnemyState newState = dist <= DETECTION_RADIUS ? EnemyState.CHASING : EnemyState.ROAMING;
+
         if (newState != state) {
             state = newState;
-            System.out.println("[" + type + " " + id + "] → " + state +
-                    " dist=" + String.format("%.1f", dist));
+            String msg = "[" + type + " " + id + "] → " + state + " (dist=" + String.format("%.1f", dist) + ")";
+            System.out.println(msg);
         }
 
-        if (type == Type.KNIGHT) {
-            Vec2 next = state == EnemyState.CHASING
-                    ? stepToward(heroPos, map)
-                    : randomStep(map);
-            if (next != null && map.isPassable(next))
-                pos = next;
-        } else {
-            // Sorcerer: teleport logic
-            teleportCooldown--;
-            if (teleportCooldown <= 0) {
-                teleportCooldown = 7;
-                if (RNG.nextDouble() < 0.5)
-                    teleport(map, heroPos);
-            }
-            // Projectile
-            projectileCooldown--;
-            if (projectileCooldown <= 0) {
-                projectileCooldown = 5;
-                pendingProjectileTarget = heroPos;
-            }
+        // Move
+        Vec2 next = chooseNextCell(heroPos, map);
+        if (next != null && map.isPassable(next)) {
+            pos = next;
         }
 
-        return type + " #" + id + " [" + state + "] dist=" + String.format("%.1f", dist);
+        return type + " " + id + ": " + state + " dist=" + String.format("%.1f", dist);
     }
 
+    private Vec2 chooseNextCell(Vec2 heroPos, GridMap map) {
+        if (state == EnemyState.CHASING) {
+            return stepToward(heroPos, map);
+        } else {
+            return randomStep(map);
+        }
+    }
+
+    /** Move one cell orthogonally toward the hero (simple greedy). */
     private Vec2 stepToward(Vec2 target, GridMap map) {
-        int[] dCols = { -1, 1, 0, 0 }, dRows = { 0, 0, -1, 1 };
-        Vec2 best = null;
-        int bestDist = Integer.MAX_VALUE;
+        int bestScore = Integer.MAX_VALUE;
+        Vec2 best     = null;
+        int[] dCols   = {-1, 1, 0, 0};
+        int[] dRows   = {0, 0, -1, 1};
+
         for (int i = 0; i < 4; i++) {
-            Vec2 c = pos.add(dCols[i], dRows[i]);
-            if (!map.isPassable(c))
-                continue;
-            int d = Math.abs(c.col() - target.col()) + Math.abs(c.row() - target.row());
-            if (d < bestDist) {
-                bestDist = d;
-                best = c;
-            }
+            Vec2 candidate = pos.add(dCols[i], dRows[i]);
+            if (!map.isPassable(candidate)) continue;
+            // Manhattan distance as heuristic
+            int score = Math.abs(candidate.col() - target.col()) +
+                        Math.abs(candidate.row() - target.row());
+            if (score < bestScore) { bestScore = score; best = candidate; }
         }
         return best;
     }
 
+    /** Random orthogonal step to a passable neighbour. */
     private Vec2 randomStep(GridMap map) {
-        int[] dCols = { -1, 1, 0, 0 }, dRows = { 0, 0, -1, 1 };
-        List<Vec2> opts = new ArrayList<>();
+        int[] dCols = {-1, 1, 0, 0};
+        int[] dRows = {0, 0, -1, 1};
+        List<Vec2> options = new java.util.ArrayList<>();
         for (int i = 0; i < 4; i++) {
             Vec2 c = pos.add(dCols[i], dRows[i]);
-            if (map.isPassable(c))
-                opts.add(c);
+            if (map.isPassable(c)) options.add(c);
         }
-        return opts.isEmpty() ? null : opts.get(RNG.nextInt(opts.size()));
+        if (options.isEmpty()) return null;
+        return options.get(RNG.nextInt(options.size()));
     }
 
-    private void teleport(GridMap map, Vec2 heroPos) {
-        List<Vec2> floors = map.allFloorCells();
-        floors.removeIf(v -> v.equals(heroPos));
-        if (!floors.isEmpty())
-            pos = floors.get(RNG.nextInt(floors.size()));
-    }
+    // ---------- Getters ----------
 
-    // ── combat ──
-    public boolean isAdjacentTo(Vec2 target) {
-        return Math.abs(pos.col() - target.col()) <= 1 && Math.abs(pos.row() - target.row()) <= 1;
-    }
-
-    /**
-     * Damage generated by this enemy hitting the hero.
-     * Knight: 4HP base. Sorcerer: 8HP base (projectile).
-     */
-    public int generateDamage() {
-        int base = type == Type.KNIGHT ? 4 : 8;
-        int str = stats.get(StatType.STR);
-        return (int) Math.max(1, base + Math.log1p(str));
-    }
-
-    /**
-     * Receive damage — Knight armour reduces by 1 (spec §2.5.1).
-     */
-    public void receiveDamage(int rawDamage) {
-        int def = stats.get(StatType.DEF);
-        int absorbed = type == Type.KNIGHT ? def + 1 : def;
-        int actual = Math.max(1, rawDamage - absorbed);
-        stats.modify(StatType.HP, -actual);
-    }
-
-    // ── projectile ──
-    public Vec2 consumePendingProjectile() {
-        Vec2 t = pendingProjectileTarget;
-        pendingProjectileTarget = null;
-        return t;
-    }
-
-    // ── getters ──
-    public String getId() {
-        return id;
-    }
-
-    public Type getType() {
-        return type;
-    }
-
-    public Vec2 getPos() {
-        return pos;
-    }
-
-    public void setPos(Vec2 p) {
-        pos = p;
-    }
-
-    public EnemyState getState() {
-        return state;
-    }
-
-    public int getStat(StatType t) {
-        return stats.get(t);
-    }
-
-    public boolean isAlive() {
-        return stats.get(StatType.HP) > 0;
-    }
+    public String     getId()    { return id; }
+    public Type       getType()  { return type; }
+    public Vec2       getPos()   { return pos; }
+    public EnemyState getState() { return state; }
+    public int        getStat(StatType t) { return stats.get(t); }
+    public boolean    isAlive()  { return stats.get(StatType.HP) > 0; }
 
     @Override
-    public String toString() {
-        return type + "[" + id + "@" + pos + " " + state + " HP=" + stats.get(StatType.HP) + "]";
-    }
+    public String toString() { return type + "[" + id + "@" + pos + " " + state + "]"; }
 }

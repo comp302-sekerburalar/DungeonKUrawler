@@ -5,12 +5,21 @@ import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.text.Text;
-import com.kurawler.components.*;
+import com.kurawler.components.DungeonButton;
+import com.kurawler.components.PixelBorder;
+import com.kurawler.components.PixelTextField;
+import com.kurawler.model.UserStore;
 
+/**
+ * Hero registration screen.
+ * Validates input, creates a new account in UserStore, then navigates to WelcomeScreen.
+ */
 public class RegisterScreen extends BaseScreen {
 
-    private PixelTextField tfUser, tfPass, tfConf;
-    private Label lblError;
+    private PixelTextField tfUsername;
+    private PixelTextField tfPassword;
+    private PixelTextField tfConfirm;
+    private Label          lblError;
 
     public RegisterScreen(ScreenManager manager) {
         super(manager);
@@ -20,38 +29,47 @@ public class RegisterScreen extends BaseScreen {
     protected Pane buildUI() {
         StackPane root = new StackPane();
         root.getStyleClass().add("dungeon-bg");
-        root.setPrefSize(W(), H());
+        root.setPrefSize(800, 600);
 
         VBox center = new VBox(0);
         center.setAlignment(Pos.CENTER);
         center.setMaxWidth(440);
 
-        Text mini = new Text("KURAWLER");
-        mini.getStyleClass().add("title-line2-small");
-        VBox tw = new VBox(mini);
-        tw.setAlignment(Pos.CENTER);
-        tw.setPadding(new Insets(0, 0, 16, 0));
+        // Mini title
+        Text miniTitle = new Text("KURAWLER");
+        miniTitle.getStyleClass().add("title-line2-small");
+        VBox titleWrap = new VBox(miniTitle);
+        titleWrap.setAlignment(Pos.CENTER);
+        titleWrap.setPadding(new Insets(0, 0, 16, 0));
 
+        // Tab header
         HBox tabs = new HBox(0);
+        tabs.setAlignment(Pos.CENTER_LEFT);
         tabs.setMaxWidth(440);
-        Button tLogin = new Button("LOGIN");
-        tLogin.getStyleClass().add("tab-btn");
-        tLogin.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(tLogin, Priority.ALWAYS);
-        tLogin.setOnAction(e -> manager.showLogin());
-        Button tReg = new Button("REGISTER");
-        tReg.getStyleClass().addAll("tab-btn", "tab-active");
-        tReg.setMaxWidth(Double.MAX_VALUE);
-        HBox.setHgrow(tReg, Priority.ALWAYS);
-        tabs.getChildren().addAll(tLogin, tReg);
 
+        Button tabLogin = new Button("LOGIN");
+        tabLogin.getStyleClass().add("tab-btn");
+        tabLogin.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(tabLogin, Priority.ALWAYS);
+        tabLogin.setOnAction(e -> manager.showLogin());
+
+        Button tabRegister = new Button("REGISTER");
+        tabRegister.getStyleClass().addAll("tab-btn", "tab-active");
+        tabRegister.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(tabRegister, Priority.ALWAYS);
+
+        tabs.getChildren().addAll(tabLogin, tabRegister);
+
+        // Stone top
         Pane stoneTop = PixelBorder.stoneTop(440);
 
+        // Form panel
         VBox form = new VBox(14);
         form.setPadding(new Insets(24, 32, 24, 32));
         form.getStyleClass().add("panel-surface");
         form.setMaxWidth(440);
 
+        // Error label
         lblError = new Label("");
         lblError.getStyleClass().add("error-label");
         lblError.setVisible(false);
@@ -59,98 +77,114 @@ public class RegisterScreen extends BaseScreen {
         lblError.setMaxWidth(Double.MAX_VALUE);
         lblError.setWrapText(true);
 
-        VBox ug = fg("CHOOSE HERO NAME");
-        tfUser = new PixelTextField("ENTER NAME...");
-        ug.getChildren().add(tfUser);
-        VBox pg = fg("SET PASSWORD");
-        tfPass = new PixelTextField("••••••••", true);
-        pg.getChildren().add(tfPass);
-        VBox cg = fg("CONFIRM PASSWORD");
-        tfConf = new PixelTextField("••••••••", true);
-        cg.getChildren().add(tfConf);
+        // Username
+        VBox userGroup = fieldGroup("CHOOSE HERO NAME");
+        tfUsername = new PixelTextField("ENTER NAME...");
+        userGroup.getChildren().add(tfUsername);
 
-        DungeonButton btn = new DungeonButton("CREATE HERO", true);
-        btn.setMaxWidth(Double.MAX_VALUE);
-        btn.setOnAction(e -> attemptRegister());
-        form.getChildren().addAll(lblError, ug, pg, cg, btn);
+        // Password
+        VBox passGroup = fieldGroup("SET PASSWORD");
+        tfPassword = new PixelTextField("••••••••", true);
+        passGroup.getChildren().add(tfPassword);
 
+        // Confirm
+        VBox confirmGroup = fieldGroup("CONFIRM PASSWORD");
+        tfConfirm = new PixelTextField("••••••••", true);
+        confirmGroup.getChildren().add(tfConfirm);
+
+        // Submit
+        DungeonButton btnCreate = new DungeonButton("CREATE HERO", true);
+        btnCreate.setMaxWidth(Double.MAX_VALUE);
+        btnCreate.setOnAction(e -> attemptRegister());
+
+        form.getChildren().addAll(lblError, userGroup, passGroup, confirmGroup, btnCreate);
+
+        // Stone bottom
         Pane stoneBottom = PixelBorder.stoneBottom(440);
-        Button back = new Button("◄  BACK TO MAIN MENU");
-        back.getStyleClass().add("link-btn");
-        VBox bw = new VBox(back);
-        bw.setAlignment(Pos.CENTER);
-        bw.setPadding(new Insets(12, 0, 0, 0));
-        back.setOnAction(e -> manager.showMainMenu());
 
-        center.getChildren().addAll(tw, tabs, stoneTop, form, stoneBottom, bw);
+        // Back link
+        Button btnBack = new Button("◄  BACK TO MAIN MENU");
+        btnBack.getStyleClass().add("link-btn");
+        VBox backWrap = new VBox(btnBack);
+        backWrap.setAlignment(Pos.CENTER);
+        backWrap.setPadding(new Insets(12, 0, 0, 0));
+        btnBack.setOnAction(e -> manager.showMainMenu());
+
+        center.getChildren().addAll(titleWrap, tabs, stoneTop, form, stoneBottom, backWrap);
         root.getChildren().add(center);
+
         root.setOnKeyPressed(e -> {
             switch (e.getCode()) {
-                case ENTER -> attemptRegister();
+                case ENTER  -> attemptRegister();
                 case ESCAPE -> manager.showMainMenu();
-                default -> {
-                }
+                default -> {}
             }
         });
         root.setFocusTraversable(true);
+
         return root;
     }
 
+    // ---------- Logic ----------
+
     private void attemptRegister() {
-        String u = tfUser.getText().trim(), p = tfPass.getRawText(), c = tfConf.getRawText();
-        if (u.isEmpty() || p.isEmpty()) {
-            showErr("ALL FIELDS REQUIRED.");
-            return;
-        }
-        if (u.length() < 3) {
-            showErr("NAME MUST BE 3+ CHARS.");
-            return;
-        }
-        if (!p.equals(c)) {
-            showErr("PASSWORDS DO NOT MATCH.");
-            return;
-        }
-        if (p.length() < 4) {
-            showErr("PASSWORD MUST BE 4+ CHARS.");
-            return;
-        }
-        if (manager.getUserStore().exists(u)) {
-            showErr("HERO NAME TAKEN.");
-            return;
-        }
-        manager.getUserStore().register(u, p);
+        String user  = tfUsername.getText().trim();
+        String pass  = tfPassword.getRawText();
+        String conf  = tfConfirm.getRawText();
 
-        manager.loginUser(u.toUpperCase());
+        if (user.isEmpty() || pass.isEmpty()) {
+            showError("ALL FIELDS ARE REQUIRED.");
+            return;
+        }
+        if (user.length() < 3) {
+            showError("HERO NAME MUST BE AT LEAST 3 CHARACTERS.");
+            return;
+        }
+        if (!pass.equals(conf)) {
+            showError("PASSWORDS DO NOT MATCH.");
+            return;
+        }
+        if (pass.length() < 4) {
+            showError("PASSWORD MUST BE AT LEAST 4 CHARACTERS.");
+            return;
+        }
 
-        manager.showWelcome(u.toUpperCase());
+        UserStore store = manager.getUserStore();
+        if (store.exists(user)) {
+            showError("HERO NAME ALREADY TAKEN.");
+            return;
+        }
+
+        store.register(user, pass);
+        hideError();
+        manager.showWelcome(user.toUpperCase());
     }
 
-    private void showErr(String m) {
-        lblError.setText(m);
+    private void showError(String msg) {
+        lblError.setText(msg);
         lblError.setVisible(true);
         lblError.setManaged(true);
     }
 
-    private void hideErr() {
+    private void hideError() {
         lblError.setVisible(false);
         lblError.setManaged(false);
     }
 
     public void reset() {
-        if (tfUser != null)
-            tfUser.clear();
-        if (tfPass != null)
-            tfPass.clear();
-        if (tfConf != null)
-            tfConf.clear();
-        hideErr();
+        if (tfUsername != null) tfUsername.clear();
+        if (tfPassword != null) tfPassword.clear();
+        if (tfConfirm  != null) tfConfirm.clear();
+        hideError();
     }
 
-    private VBox fg(String lbl) {
-        VBox g = new VBox(6);
-        Label l = new Label(lbl);
-        l.getStyleClass().add("field-label");
-        g.getChildren().add(l);
-        return g;
+    // ---------- Helpers ----------
+
+    private VBox fieldGroup(String labelText) {
+        VBox group = new VBox(6);
+        Label lbl = new Label(labelText);
+        lbl.getStyleClass().add("field-label");
+        group.getChildren().add(lbl);
+        return group;
     }
 }

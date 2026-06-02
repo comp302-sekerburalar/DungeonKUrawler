@@ -2,14 +2,18 @@ package com.kurawler.screens;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.control.Button;
 import javafx.scene.layout.*;
 import javafx.scene.text.Text;
-import com.kurawler.components.*;
+import com.kurawler.components.DungeonButton;
+import com.kurawler.components.PixelBorder;
 
+/**
+ * Welcome / pre-game screen shown after successful login or registration.
+ * Displays the quest briefing and a "Begin Quest" button.
+ */
 public class WelcomeScreen extends BaseScreen {
 
-    private Text txtHero;
+    private Text  txtHeroName;
     private String heroName = "HERO";
 
     public WelcomeScreen(ScreenManager manager) {
@@ -20,68 +24,94 @@ public class WelcomeScreen extends BaseScreen {
     protected Pane buildUI() {
         StackPane root = new StackPane();
         root.getStyleClass().add("dungeon-bg");
-        root.setPrefSize(W(), H());
+        root.setPrefSize(800, 600);
 
         VBox center = new VBox(0);
         center.setAlignment(Pos.CENTER);
         center.setMaxWidth(480);
 
+        // Stone top
         Pane stoneTop = PixelBorder.stoneTop(480);
 
-        VBox panel = new VBox(14);
-        panel.setPadding(new Insets(28, 36, 28, 36));
+        // Panel
+        VBox panel = new VBox(16);
+        panel.setPadding(new Insets(32, 40, 32, 40));
         panel.setAlignment(Pos.CENTER);
         panel.getStyleClass().add("panel-surface");
         panel.setMaxWidth(480);
 
-        Text badge = new Text("[ HERO UNLOCKED ]");
-        badge.getStyleClass().add("welcome-badge");
-        txtHero = new Text("WELCOME, " + heroName + "!");
-        txtHero.getStyleClass().add("welcome-title");
+        // Trophy emoji replacement with text
+        Text trophy = new Text("[ HERO UNLOCKED ]");
+        trophy.getStyleClass().add("welcome-badge");
+
+        txtHeroName = new Text("WELCOME, " + heroName + "!");
+        txtHeroName.getStyleClass().add("welcome-title");
+
         Text sub = new Text("YOUR ADVENTURE BEGINS...");
         sub.getStyleClass().add("welcome-subtitle");
 
-        Region div = new Region();
-        div.setPrefHeight(2);
-        div.setMaxWidth(Double.MAX_VALUE);
-        div.getStyleClass().add("divider");
+        // Divider
+        Region divider = new Region();
+        divider.setPrefHeight(2);
+        divider.setMaxWidth(Double.MAX_VALUE);
+        divider.getStyleClass().add("divider");
 
-        VBox brief = new VBox(6);
-        brief.setAlignment(Pos.CENTER_LEFT);
-        for (String l : new String[] { "▸  FIND THE HIDDEN RELIC TO WIN.", "▸  DEFEAT KNIGHTS & SORCERERS.",
-                "▸  DON'T LET YOUR HP REACH ZERO.", "▸  COLLECT WEAPONS, ARMOUR & POTIONS." }) {
-            Text t = new Text(l);
-            t.getStyleClass().add("briefing-text");
-            brief.getChildren().add(t);
-        }
+        // Quest briefing
+        VBox briefing = buildBriefing();
 
+        // Buttons
         DungeonButton btnBegin = new DungeonButton("⚔  BEGIN QUEST", true);
+        DungeonButton btnBack  = new DungeonButton("◄  BACK TO MENU");
+
         btnBegin.setMaxWidth(Double.MAX_VALUE);
-        btnBegin.setOnAction(e -> manager.showMapSelection(heroName));
-        DungeonButton btnBack = new DungeonButton("◄  BACK");
         btnBack.setMaxWidth(Double.MAX_VALUE);
+
+        btnBegin.setOnAction(e -> manager.startGame(heroName));
         btnBack.setOnAction(e -> manager.showMainMenu());
 
-        panel.getChildren().addAll(badge, txtHero, sub, div, brief, btnBegin, btnBack);
+        panel.getChildren().addAll(trophy, txtHeroName, sub, divider, briefing, btnBegin, btnBack);
 
+        // Stone bottom
         Pane stoneBottom = PixelBorder.stoneBottom(480);
+
         center.getChildren().addAll(stoneTop, panel, stoneBottom);
         root.getChildren().add(center);
+
         root.setOnKeyPressed(e -> {
             switch (e.getCode()) {
-                case ENTER -> manager.showMapSelection(heroName);
+                case ENTER  -> manager.startGame(heroName);
                 case ESCAPE -> manager.showMainMenu();
-                default -> {
-                }
+                default -> {}
             }
         });
         root.setFocusTraversable(true);
+
         return root;
     }
 
+    private VBox buildBriefing() {
+        VBox box = new VBox(8);
+        box.setAlignment(Pos.CENTER_LEFT);
+
+        String[] lines = {
+            "▸  FIND THE HIDDEN RELIC TO WIN.",
+            "▸  DEFEAT KNIGHTS & SORCERERS.",
+            "▸  DON'T LET YOUR HP REACH ZERO.",
+            "▸  USE ITEMS, SPELLS & WEAPONS WISELY."
+        };
+        for (String line : lines) {
+            Text t = new Text(line);
+            t.getStyleClass().add("briefing-text");
+            box.getChildren().add(t);
+        }
+        return box;
+    }
+
+    /** Update the hero name label before the screen is shown. */
     public void setHeroName(String name) {
         this.heroName = name;
-        if (txtHero != null)
-            txtHero.setText("WELCOME, " + name + "!");
+        if (txtHeroName != null) {
+            txtHeroName.setText("WELCOME, " + name + "!");
+        }
     }
 }

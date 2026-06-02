@@ -6,49 +6,91 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.*;
 import javafx.util.Duration;
 
+/**
+ * A small animated pixel-art torch made entirely from JavaFX shapes.
+ * The outer flame flickers using a continuous ScaleTransition.
+ */
 public class TorchAnimation extends Pane {
 
-    private static final double W = 22, H = 56;
+    private static final double TOTAL_H = 56;
+    private static final double TOTAL_W = 22;
 
     public TorchAnimation() {
-        setPrefSize(W, H);
-        setMinSize(W, H);
-        setMaxSize(W, H);
+        setPrefSize(TOTAL_W, TOTAL_H);
+        setMinSize(TOTAL_W, TOTAL_H);
+        setMaxSize(TOTAL_W, TOTAL_H);
         build();
     }
 
     private void build() {
-        Polygon outer = new Polygon(W / 2, 0, W, 14, W * .9, 22, W * .1, 22, 0, 14);
-        outer.setFill(Color.web("#c0392b"));
-        outer.setOpacity(0.85);
+        // --- Outer flame (red/orange) ---
+        Polygon outerFlame = new Polygon(
+            TOTAL_W / 2.0, 0,
+            TOTAL_W,       14,
+            TOTAL_W * 0.9, 22,
+            TOTAL_W * 0.1, 22,
+            0,             14
+        );
+        outerFlame.setFill(Color.web("#c0392b"));
+        outerFlame.setOpacity(0.85);
+        outerFlame.setLayoutX(0);
+        outerFlame.setLayoutY(0);
 
-        Polygon inner = new Polygon(W / 2, 4, W * .8, 14, W * .75, 22, W * .25, 22, W * .2, 14);
-        inner.setFill(Color.web("#c9a227"));
+        // --- Inner flame (gold) ---
+        Polygon innerFlame = new Polygon(
+            TOTAL_W / 2.0, 4,
+            TOTAL_W * 0.8, 14,
+            TOTAL_W * 0.75, 22,
+            TOTAL_W * 0.25, 22,
+            TOTAL_W * 0.2, 14
+        );
+        innerFlame.setFill(Color.web("#c9a227"));
+        innerFlame.setLayoutX(0);
+        innerFlame.setLayoutY(0);
 
-        Rectangle body = new Rectangle((W - 8) / 2, 22, 8, 24);
+        // --- Torch body ---
+        Rectangle body = new Rectangle(
+            (TOTAL_W - 8) / 2.0, 22,
+            8, 24
+        );
         body.setFill(Color.web("#5a3a1a"));
         body.setStroke(Color.web("#3a2010"));
         body.setStrokeWidth(1);
+        body.setArcWidth(2);
+        body.setArcHeight(2);
 
-        Rectangle base = new Rectangle((W - 14) / 2, 46, 14, 5);
+        // --- Torch base ---
+        Rectangle base = new Rectangle(
+            (TOTAL_W - 14) / 2.0, 46,
+            14, 5
+        );
         base.setFill(Color.web("#3a2010"));
 
-        getChildren().addAll(outer, inner, body, base);
+        getChildren().addAll(outerFlame, innerFlame, body, base);
 
-        ScaleTransition ft = new ScaleTransition(Duration.millis(120), outer);
-        ft.setFromX(1.0);
-        ft.setToX(0.85);
-        ft.setFromY(1.0);
-        ft.setToY(1.12);
-        ft.setAutoReverse(true);
-        ft.setCycleCount(Animation.INDEFINITE);
-        ft.play();
+        // --- Flicker animation on the outer flame ---
+        ScaleTransition flicker = new ScaleTransition(Duration.millis(120), outerFlame);
+        flicker.setFromX(1.0); flicker.setToX(0.85);
+        flicker.setFromY(1.0); flicker.setToY(1.12);
+        flicker.setAutoReverse(true);
+        flicker.setCycleCount(Animation.INDEFINITE);
+        flicker.play();
 
-        FadeTransition fade = new FadeTransition(Duration.millis(300), inner);
-        fade.setFromValue(0.8);
-        fade.setToValue(1.0);
-        fade.setAutoReverse(true);
-        fade.setCycleCount(Animation.INDEFINITE);
-        fade.play();
+        // --- Slower pulse on the inner flame ---
+        ScaleTransition pulse = new ScaleTransition(Duration.millis(200), innerFlame);
+        pulse.setFromX(0.9); pulse.setToX(1.05);
+        pulse.setFromY(0.95); pulse.setToY(1.05);
+        pulse.setAutoReverse(true);
+        pulse.setCycleCount(Animation.INDEFINITE);
+        pulse.setDelay(Duration.millis(60));
+        pulse.play();
+
+        // Glow-like opacity flicker
+        FadeTransition glowFade = new FadeTransition(Duration.millis(300), innerFlame);
+        glowFade.setFromValue(0.8);
+        glowFade.setToValue(1.0);
+        glowFade.setAutoReverse(true);
+        glowFade.setCycleCount(Animation.INDEFINITE);
+        glowFade.play();
     }
 }
